@@ -1,0 +1,162 @@
+# Obsolete: direct tag-platform toggles (smartlend_tag_usb_c_cable, _adapter,
+# _meter) were removed. The UI kiosk now handles every tap — it captures the
+# tag_scanned event, opens the identity/return modal, and calls the per-item
+# toggle script with the correct holder + NFC UID. The old automations called
+# the shared script without those fields, which both raced the UI and raised
+# `holder_entity is undefined` errors.
+
+- id: smartlend_user_card
+  alias: "SmartLend - User card scan sets active user"
+  description: "White card sets active_user to 'Team'; cleared automatically after 30s"
+  mode: restart
+  trigger:
+    - platform: tag
+      tag_id: !secret tag_uid_user_card
+  action:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.active_user
+      data:
+        value: "Team"
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.last_action
+      data:
+        value: "User card scanned - identity: Team"
+    - delay: "00:00:30"
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.active_user
+      data:
+        value: ""
+
+- id: smartlend_auto_reset_borrow_counter
+  alias: "SmartLend - Reset daily borrow counter at midnight"
+  description: "Daily reset of the borrow counter"
+  mode: single
+  trigger:
+    - platform: time
+      at: "00:00:00"
+  action:
+    - service: counter.reset
+      target:
+        entity_id: counter.borrow_count_today
+
+- id: smartlend_mqtt_status_publish
+  alias: "SmartLend - Publish bridge heartbeat to MQTT"
+  description: "Every 60s publish HA status to MQTT topic (external dashboards can subscribe)"
+  mode: single
+  trigger:
+    - platform: time_pattern
+      minutes: "/1"
+  action:
+    - continue_on_error: true
+      service: mqtt.publish
+      data:
+        topic: smartlend/bridge/status
+        payload: "online"
+        qos: 0
+        retain: true
+
+- id: smartlend_led_on_borrow
+  alias: "SmartLend - LED green on borrow, blue on return"
+  description: "Fires whenever an item state changes and flashes the status ring"
+  mode: parallel
+  max: 10
+  trigger:
+    - platform: state
+      entity_id:
+        - input_select.item_usb_c_cable
+        - input_select.item_adapter
+        - input_select.item_meter
+        - input_select.item_tripod
+        - input_select.item_microphone
+        - input_select.item_ring_light
+        - input_select.item_hdmi_cable
+        - input_select.item_headphones
+        - input_select.item_sd_reader
+  condition:
+    - condition: state
+      entity_id: input_boolean.quiet_mode
+      state: "off"
+  action:
+    # Clear any lingering color (e.g. the 'selecting' white) so the transition
+    # to the new color is clean and not an imperceptible blend. 80 ms is enough
+    # for ESPHome's 100 ms default transition to begin from zero.
+    - service: light.turn_off
+      target:
+        entity_id: light.smartlend_nfc_status_ring
+      data:
+        transition: 0
+    - delay: "00:00:00.08"
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.state == 'borrowed' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.smartlend_nfc_status_ring
+              data:
+                rgb_color: [0, 255, 0]
+                brightness_pct: 55
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.state == 'available' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.smartlend_nfc_status_ring
+              data:
+                rgb_color: [0, 120, 255]
+                brightness_pct: 55
+    - delay: "00:00:02.5"
+    - service: light.turn_off
+      target:
+        entity_id: light.smartlend_nfc_status_ring
+
+- id: smartlend_led_white_on_scan
+  alias: "SmartLend - LED white on ANY tag scan"
+  description: "White flash on tag tap to signal 'waiting for selection'. Aborts itself as soon as any item state changes (borrow/return) so the green/blue/red flash from smartlend_led_on_borrow isn't drowned out."
+  mode: restart
+  trigger:
+    - platform: event
+      event_type: tag_scanned
+  action:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.last_action
+      data:
+        value: >
+          Tag scanned: {{ trigger.event.data.tag_id }} — waiting for selection…
+    - service: light.turn_on
+      target:
+        entity_id: light.smartlend_nfc_status_ring
+      data:
+        rgb_color: [255, 255, 255]
+        brightness_pct: 25
+    # Wait until the user picks an item (state change) OR 15 s elapse.
+    # If a state change fires, we yield and let smartlend_led_on_borrow
+    # paint green/blue — we do NOT turn the light off, otherwise we'd
+    # race with that automation and win (dark).
+    - wait_for_trigger:
+        - platform: state
+          entity_id:
+            - input_select.item_usb_c_cable
+            - input_select.item_adapter
+            - input_select.item_meter
+            - input_select.item_tripod
+            - input_select.item_microphone
+            - input_select.item_ring_light
+            - input_select.item_hdmi_cable
+            - input_select.item_headphones
+            - input_select.item_sd_reader
+      timeout: "00:00:15"
+      continue_on_timeout: true
+    - if:
+        - condition: template
+          value_template: "{{ wait.trigger is none }}"
+      then:
+        - service: light.turn_off
+          target:
+            entity_id: light.smartlend_nfc_status_ring

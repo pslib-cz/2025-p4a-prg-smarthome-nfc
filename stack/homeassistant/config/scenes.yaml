@@ -1,0 +1,15 @@
+- id: smartlend_presentation
+  name: "SmartLend - Presentation mode"
+  icon: mdi:presentation
+  entities:
+    input_boolean.quiet_mode: "off"
+    input_select.system_mode: presentation
+    input_text.last_action: "Presentation mode active"
+
+- id: smartlend_maintenance
+  name: "SmartLend - Maintenance mode"
+  icon: mdi:wrench
+  entities:
+    input_boolean.quiet_mode: "on"
+    input_select.system_mode: maintenance
+    input_text.last_action: "Maintenance mode - scans suppressed"

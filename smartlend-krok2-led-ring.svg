@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">SmartLend krok 2 - LED ring</title>
+  <desc id="desc">Samostatny diagram pro pridani WS2812B LED ringu po zprovozneni NFC. Ring se pripoji na GND, 5V a GPIO3 pres 330 ohm odpor.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
+      .warn { fill: #fff1f2; stroke: #fb7185; stroke-width: 2; }
+      .ok { fill: #ecfdf5; stroke: #34d399; stroke-width: 2; }
+      .note { fill: #eef3fb; stroke: #cbd5e1; stroke-width: 2; }
+      .txt { font-family: Arial, Helvetica, sans-serif; fill: #111827; }
+      .title { font-size: 34px; font-weight: 800; }
+      .h2 { font-size: 25px; font-weight: 800; }
+      .h3 { font-size: 19px; font-weight: 800; }
+      .body { font-size: 17px; }
+      .small { font-size: 13px; }
+      .pinText { font-size: 17px; font-weight: 800; }
+      .label { font-size: 18px; font-weight: 800; }
+      .pin { fill: #fff; stroke: #111827; stroke-width: 2; }
+      .pad { fill: #d1d5db; stroke: #6b7280; stroke-width: 1.5; }
+      .wireBlack { stroke: #111827; stroke-width: 8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wireOrange { stroke: #f97316; stroke-width: 8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wirePurple { stroke: #7c3aed; stroke-width: 8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .doneWire { stroke: #94a3b8; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 9 8; }
+      .muted { fill: #4b5563; }
+      .white { fill: #fff; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="1000"/>
+  <text class="txt title" x="48" y="56">KROK 2 - pridani kulateho LED ringu</text>
+  <text class="txt body muted" x="48" y="88">Tenhle krok delej az potom, co krok 1 funguje a NFC v ESPHome cte UID tagu/karty.</text>
+
+  <rect class="warn" x="48" y="116" width="1504" height="86" rx="14"/>
+  <text class="txt h3" x="72" y="145">Bezpecnost ringu</text>
+  <text class="txt body" x="72" y="173">Zapojovat pri vypnutem USB. GND musi byt spolecna. Ring dej max 20-40 % jas. Plny bily jas muze brat moc proudu.</text>
+  <text class="txt body" x="72" y="195">Kratke demo: GPIO3 -> 330 ohm -> IN. Nejjistejsi verze: pridej level shifter 74AHCT125 mezi ESP a IN.</text>
+
+  <rect class="panel" x="48" y="232" width="1504" height="575" rx="18"/>
+
+  <!-- ESP board simplified but matching visible side; step 1 NFC is already connected -->
+  <rect x="105" y="330" width="375" height="360" rx="18" fill="#111827" stroke="#030712" stroke-width="4"/>
+  <rect x="238" y="298" width="110" height="52" rx="9" fill="#cfd5de" stroke="#6b7280" stroke-width="3"/>
+  <rect x="222" y="372" width="58" height="30" rx="13" fill="#6b7280" stroke="#374151" stroke-width="2"/>
+  <rect x="304" y="372" width="58" height="30" rx="13" fill="#6b7280" stroke="#374151" stroke-width="2"/>
+  <polygon points="292,460 343,511 292,562 241,511" fill="#030712" stroke="#d1d5db" stroke-width="2"/>
+  <rect x="240" y="666" width="104" height="14" rx="2" fill="#b91c1c"/>
+  <text class="txt h2 white" x="178" y="430">ESP32-C3</text>
+  <text class="txt body white" x="158" y="462">krok 1 uz hotovy</text>
+  <text class="txt small" x="158" y="490" fill="#cbd5e1">NFC uz ma 3.3/GND/5/6</text>
+  <text class="txt small" x="218" y="654" fill="#cbd5e1">cervena antena dole</text>
+
+  <!-- ESP side pads: 8 pins on each side, same orientation as the main diagram/photo -->
+  <g>
+    <rect class="pad" x="82" y="366" width="23" height="18" rx="4"/><text class="txt pinText" x="50" y="382">7</text>
+    <rect class="pad" x="82" y="406" width="23" height="18" rx="4"/><text class="txt pinText" x="50" y="422">6</text>
+    <rect class="pad" x="82" y="446" width="23" height="18" rx="4"/><text class="txt pinText" x="50" y="462">5</text>
+    <rect class="pad" x="82" y="486" width="23" height="18" rx="4"/><text class="txt pinText" x="50" y="502">4</text>
+    <rect class="pad" x="82" y="526" width="23" height="18" rx="4"/><text class="txt pinText" x="50" y="542">3</text>
+    <rect class="pad" x="82" y="566" width="23" height="18" rx="4"/><text class="txt pinText" x="50" y="582">2</text>
+    <rect class="pad" x="82" y="606" width="23" height="18" rx="4"/><text class="txt pinText" x="50" y="622">1</text>
+    <rect class="pad" x="82" y="646" width="23" height="18" rx="4"/><text class="txt pinText" x="38" y="662">21</text>
+    <rect class="pad" x="480" y="366" width="25" height="18" rx="4"/><text class="txt pinText" x="520" y="382">5V</text>
+    <rect class="pad" x="480" y="406" width="25" height="18" rx="4"/><text class="txt pinText" x="520" y="422">G</text>
+    <rect class="pad" x="480" y="446" width="25" height="18" rx="4"/><text class="txt pinText" x="520" y="462">3.3</text>
+    <rect class="pad" x="480" y="486" width="25" height="18" rx="4"/><text class="txt pinText" x="520" y="502">10</text>
+    <rect class="pad" x="480" y="526" width="25" height="18" rx="4"/><text class="txt pinText" x="520" y="542">9</text>
+    <rect class="pad" x="480" y="566" width="25" height="18" rx="4"/><text class="txt pinText" x="520" y="582">8</text>
+    <rect class="pad" x="480" y="606" width="25" height="18" rx="4"/><text class="txt pinText" x="520" y="622">20</text>
+    <rect class="pad" x="480" y="646" width="25" height="18" rx="4"/><text class="txt pinText" x="520" y="662">0</text>
+  </g>
+  <rect x="34" y="516" width="104" height="38" rx="10" fill="none" stroke="#7c3aed" stroke-width="4"/>
+  <path d="M105 535 H145" stroke="#7c3aed" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <rect x="145" y="512" width="168" height="46" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="3"/>
+  <text class="txt label" x="164" y="541" fill="#5b21b6">PIN 3 / GPIO3</text>
+  <rect class="pin" x="555" y="367" width="110" height="44" rx="8"/><text class="txt pinText" x="594" y="395">5V</text>
+  <rect class="pin" x="555" y="431" width="110" height="44" rx="8"/><text class="txt pinText" x="590" y="459">GND</text>
+  <rect class="pin" x="555" y="495" width="110" height="44" rx="8"/><text class="txt pinText" x="586" y="523">GPIO3</text>
+  <text class="txt small" x="535" y="556" fill="#7c3aed">sem dej novy fialovy kabel</text>
+  <text class="txt small muted" x="105" y="720">Fialovy ramecek ukazuje novy pin pro LED data: ESP pin 3 / GPIO3.</text>
+
+  <!-- Already connected NFC from step 1, shown as thin grey context only -->
+  <path class="doneWire" d="M505 455 H545 V280 H715"/>
+  <path class="doneWire" d="M505 415 H545 V260 H715"/>
+  <path class="doneWire" d="M82 455 H45 V248 H715"/>
+  <path class="doneWire" d="M82 415 H65 V228 H715"/>
+  <rect class="note" x="700" y="245" width="190" height="84" rx="10"/>
+  <text class="txt small" x="720" y="270">UZ HOTOVO Z KROKU 1</text>
+  <text class="txt small muted" x="720" y="293">NFC: 3.3, GND, GPIO5, GPIO6</text>
+  <text class="txt small muted" x="720" y="314">Sede cary ted neres.</text>
+
+  <!-- Big LED ring: pins on the left exactly like the new photo -->
+  <circle cx="1160" cy="515" r="185" fill="#111827" stroke="#030712" stroke-width="8"/>
+  <circle cx="1160" cy="515" r="112" fill="#fff" stroke="#9ca3af" stroke-width="3"/>
+  <g fill="#fbbf24">
+    <circle cx="1160" cy="334" r="11"/><circle cx="1229" cy="349" r="11"/><circle cx="1284" cy="391" r="11"/><circle cx="1321" cy="450" r="11"/>
+    <circle cx="1334" cy="515" r="11"/><circle cx="1321" cy="580" r="11"/><circle cx="1284" cy="639" r="11"/><circle cx="1229" cy="681" r="11"/>
+    <circle cx="1160" cy="696" r="11"/><circle cx="1091" cy="681" r="11"/><circle cx="1036" cy="639" r="11"/><circle cx="999" cy="580" r="11"/>
+    <circle cx="986" cy="515" r="11"/><circle cx="999" cy="450" r="11"/><circle cx="1036" cy="391" r="11"/><circle cx="1091" cy="349" r="11"/>
+  </g>
+  <text class="txt h2" x="1115" y="506">LED</text>
+  <text class="txt h2" x="1100" y="542">RING</text>
+
+  <!-- Real pin stacks. Top stack is GND/VCC/OUT, bottom stack is IN/VCC/GND. -->
+  <rect class="note" x="760" y="296" width="260" height="44" rx="9"/>
+  <text class="txt h3" x="790" y="324">HORNI TROJICE: TED NE</text>
+  <rect x="930" y="350" width="108" height="104" rx="8" fill="#0f172a" stroke="#020617" stroke-width="3"/>
+  <line x1="880" y1="374" x2="930" y2="374" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+  <line x1="880" y1="404" x2="930" y2="404" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+  <line x1="880" y1="434" x2="930" y2="434" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+  <text class="txt small white" x="946" y="380">GND</text>
+  <text class="txt small white" x="946" y="410">VCC</text>
+  <text class="txt small white" x="946" y="440">OUT</text>
+
+  <rect class="ok" x="735" y="490" width="195" height="44" rx="9"/>
+  <text class="txt h3" x="770" y="518">POUZIJ DOLE</text>
+  <rect x="930" y="548" width="108" height="104" rx="8" fill="#0f172a" stroke="#020617" stroke-width="3"/>
+  <line x1="880" y1="572" x2="930" y2="572" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+  <line x1="880" y1="602" x2="930" y2="602" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+  <line x1="880" y1="632" x2="930" y2="632" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+  <text class="txt small white" x="946" y="578">IN</text>
+  <text class="txt small white" x="946" y="608">VCC</text>
+  <text class="txt small white" x="946" y="638">GND</text>
+
+  <rect x="1072" y="316" width="300" height="54" rx="10" fill="#fff" opacity=".92" stroke="#e5e7eb" stroke-width="2"/>
+  <text class="txt body" x="1092" y="338">Pin layout podle vaseho ringu:</text>
+  <text class="txt body" x="1092" y="360">nahore GND/VCC/OUT, dole IN/VCC/GND.</text>
+
+  <!-- Wires -->
+  <path class="wireBlack" d="M665 453 H735 V632 H880"/>
+  <path class="wireOrange" d="M665 389 H760 V602 H880"/>
+  <path class="wirePurple" d="M665 517 H720 V572 H760"/>
+  <path class="wirePurple" d="M880 572 H900"/>
+  <circle cx="665" cy="453" r="8" fill="#111827"/><circle cx="880" cy="632" r="8" fill="#111827"/>
+  <circle cx="665" cy="389" r="8" fill="#f97316"/><circle cx="880" cy="602" r="8" fill="#f97316"/>
+  <circle cx="665" cy="517" r="8" fill="#7c3aed"/><circle cx="880" cy="572" r="8" fill="#7c3aed"/>
+
+  <rect x="760" y="550" width="120" height="44" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="3"/>
+  <text class="txt label" x="785" y="578" fill="#5b21b6">330 ohm</text>
+
+  <rect x="675" y="660" width="400" height="112" rx="14" fill="#fff" opacity=".95" stroke="#e5e7eb" stroke-width="2"/>
+  <text class="txt label" x="700" y="693">1) ESP GND -> spodni GND</text>
+  <text class="txt label" x="700" y="728" fill="#f97316">2) ESP 5V -> spodni VCC</text>
+  <text class="txt label" x="700" y="763" fill="#7c3aed">3) NOVY KABEL: ESP pin 3 / GPIO3 -> ring IN</text>
+
+  <rect class="ok" x="84" y="832" width="690" height="122" rx="14"/>
+  <text class="txt h3" x="110" y="864">Poradi zapojeni</text>
+  <text class="txt body" x="110" y="896">1. NFC z kroku 1 nech zapojene. 2. Odpoj USB. 3. Pridej ring: GND, 5V, pin 3/GPIO3->IN.</text>
+  <text class="txt body" x="110" y="927">Pak zapni ESP. V ESPHome nastav jas nizko, idealne 20-40 %.</text>
+
+  <rect class="warn" x="814" y="832" width="690" height="122" rx="14"/>
+  <text class="txt h3" x="840" y="864">Co nespalit</text>
+  <text class="txt body" x="840" y="896">Data ringu nejdou na 5V. Data jdou z ESP pinu 3 / GPIO3 do IN.</text>
+  <text class="txt body" x="840" y="927">3.3V data ring nespali. 5V do ESP GPIO by ESP spalilo.</text>
+</svg>

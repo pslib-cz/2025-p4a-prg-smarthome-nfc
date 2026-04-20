@@ -1,0 +1,62 @@
+name: smartlend
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: smartlend-ha
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ./homeassistant/config:/config
+      - ./ssl:/ssl:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    depends_on:
+      - mosquitto
+
+  esphome:
+    image: ghcr.io/esphome/esphome:stable
+    container_name: smartlend-esphome
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      TZ: ${TZ}
+      ESPHOME_DASHBOARD_USE_PING: "true"
+    volumes:
+      - ./esphome/config:/config
+      - /etc/localtime:/etc/localtime:ro
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: smartlend-mqtt
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1883:1883"
+      - "0.0.0.0:8883:8883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+      - ./ssl:/mosquitto/ssl:ro
+
+  ui:
+    build:
+      context: ./ui
+      args:
+        # NEXT_PUBLIC_* are baked into the JS bundle at build time.
+        NEXT_PUBLIC_HA_URL: ${HA_URL:-http://localhost:8123}
+        NEXT_PUBLIC_HA_TOKEN: ${HA_TOKEN}
+    container_name: smartlend-ui
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: ${TZ}
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    depends_on:
+      - homeassistant

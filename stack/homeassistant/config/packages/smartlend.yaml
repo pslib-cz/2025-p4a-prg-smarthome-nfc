@@ -1,0 +1,230 @@
+input_select:
+  item_usb_c_cable:
+    name: "USB-C cable"
+    icon: mdi:usb-port
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  item_adapter:
+    name: "Adapter"
+    icon: mdi:power-plug
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  item_meter:
+    name: "Meter"
+    icon: mdi:multimeter
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  item_tripod:
+    name: "Tripod"
+    icon: mdi:camera-outline
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  item_microphone:
+    name: "Microphone"
+    icon: mdi:microphone
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  item_ring_light:
+    name: "Ring light"
+    icon: mdi:lightbulb-on-outline
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  item_hdmi_cable:
+    name: "HDMI cable"
+    icon: mdi:hdmi-port
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  item_headphones:
+    name: "Headphones"
+    icon: mdi:headphones
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  item_sd_reader:
+    name: "SD card reader"
+    icon: mdi:sd
+    options:
+      - available
+      - borrowed
+    initial: available
+
+  system_mode:
+    name: "SmartLend system mode"
+    icon: mdi:cog
+    options:
+      - normal
+      - maintenance
+      - presentation
+    initial: normal
+
+  borrower:
+    name: "Current borrower"
+    icon: mdi:account-circle
+    options:
+      - "Unassigned"
+      - "David"
+      - "Petr"
+      - "Jana"
+      - "Adam"
+      - "Host (Guest)"
+    initial: "Unassigned"
+
+input_text:
+  last_action:
+    name: "Last action"
+    icon: mdi:clipboard-text-clock
+    max: 120
+    initial: "Idle"
+
+  active_user:
+    name: "Active user"
+    icon: mdi:account
+    max: 40
+    initial: ""
+
+  holder_usb_c_cable:
+    name: "USB-C cable holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  holder_adapter:
+    name: "Adapter holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  holder_meter:
+    name: "Meter holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  holder_tripod:
+    name: "Tripod holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  holder_microphone:
+    name: "Microphone holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  holder_ring_light:
+    name: "Ring light holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  holder_hdmi_cable:
+    name: "HDMI cable holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  holder_headphones:
+    name: "Headphones holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  holder_sd_reader:
+    name: "SD card reader holder"
+    icon: mdi:account-arrow-right
+    max: 40
+    initial: ""
+
+  # NFC UID used to borrow each item. Cleared on return. Used by the UI to
+  # decide whether tapping a card should auto-open the return confirmation
+  # (same card as borrow) or the classic identity picker (different card).
+  last_nfc_usb_c_cable:
+    name: "USB-C cable last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+  last_nfc_adapter:
+    name: "Adapter last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+  last_nfc_meter:
+    name: "Meter last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+  last_nfc_tripod:
+    name: "Tripod last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+  last_nfc_microphone:
+    name: "Microphone last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+  last_nfc_ring_light:
+    name: "Ring light last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+  last_nfc_hdmi_cable:
+    name: "HDMI cable last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+  last_nfc_headphones:
+    name: "Headphones last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+  last_nfc_sd_reader:
+    name: "SD card reader last NFC UID"
+    icon: mdi:nfc
+    max: 40
+    initial: ""
+
+input_boolean:
+  quiet_mode:
+    name: "Quiet mode (LED/sound off)"
+    icon: mdi:volume-off
+
+counter:
+  borrow_count_today:
+    name: "Borrow count today"
+    icon: mdi:counter
+    initial: 0
+    step: 1
+    restore: true

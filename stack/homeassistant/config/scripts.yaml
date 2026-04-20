@@ -1,0 +1,365 @@
+smartlend_toggle_item:
+  alias: "SmartLend - Toggle item borrow/return"
+  description: "Flips the given input_select between available <-> borrowed with per-item holder guard"
+  mode: parallel
+  max: 10
+  fields:
+    item_entity:
+      description: "entity_id of the input_select to toggle"
+      example: "input_select.item_usb_c_cable"
+    item_label:
+      description: "Human-readable name for the item"
+      example: "USB-C cable"
+    holder_entity:
+      description: "input_text entity that tracks who currently holds this item"
+      example: "input_text.holder_usb_c_cable"
+    nfc_entity:
+      description: "input_text entity that remembers the NFC UID used to borrow this item"
+      example: "input_text.last_nfc_usb_c_cable"
+    nfc_uid:
+      description: "NFC tag UID captured at the moment the user acted (empty if no tap in the flow)"
+      example: "6E-27-17-07"
+  sequence:
+    - variables:
+        current: "{{ states(item_entity) }}"
+        borrower_sel: "{{ states('input_select.borrower') }}"
+        active_txt: "{{ states('input_text.active_user') | default('') }}"
+        hint: "{{ user_hint | default('') }}"
+        user: >-
+          {% if hint and hint not in ['Unassigned', 'unknown', ''] %}{{ hint }}{% elif borrower_sel not in ['Unassigned', 'unknown', 'unavailable', ''] %}{{ borrower_sel }}{% elif active_txt not in ['', 'unknown', 'none'] %}{{ active_txt }}{% endif %}
+        current_holder: "{{ states(holder_entity) | default('') }}"
+        # Resolve nfc fields into locals — the downstream `choose` below checks
+        # these, and using the raw script field names there hit a Jinja scoping
+        # corner case where `nfc_entity is defined` returned False even when
+        # the caller provided the field. Hoisting is a reliable workaround.
+        nfc_entity_safe: "{{ nfc_entity | default('') }}"
+        nfc_uid_safe: "{{ nfc_uid | default('') }}"
+        # Denial = item is borrowed, and a *different* identified user tries to return it
+        is_denied: >-
+          {{ current == 'borrowed'
+             and user and user != ''
+             and current_holder and current_holder != ''
+             and user != current_holder }}
+    # ───── DENIED branch: wrong person trying to return someone else's item ─────
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ is_denied }}"
+          sequence:
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.last_action
+              data:
+                value: "🚫 DENIED: {{ item_label }} already borrowed by {{ current_holder }} — {{ user }} cannot return it (at {{ now().strftime('%H:%M') }})"
+            - service: logbook.log
+              data:
+                name: SmartLend
+                message: "DENIED: {{ user }} tried to return {{ item_label }} held by {{ current_holder }}"
+                entity_id: "{{ item_entity }}"
+            - service: light.turn_on
+              target:
+                entity_id: light.smartlend_nfc_status_ring
+              data:
+                rgb_color: [255, 0, 0]
+                brightness_pct: 50
+            - delay: "00:00:01"
+            - service: light.turn_off
+              target:
+                entity_id: light.smartlend_nfc_status_ring
+        # ───── NORMAL branch: legal borrow or return ─────
+        - conditions:
+            - condition: template
+              value_template: "{{ not is_denied }}"
+          sequence:
+            - variables:
+                next_state: "{{ 'borrowed' if current == 'available' else 'available' }}"
+                verb: "{{ 'borrowed' if current == 'available' else 'returned' }}"
+                by: "{{ (' by ' ~ user) if user else '' }}"
+                message: "{{ item_label }} {{ verb }}{{ by }} at {{ now().strftime('%H:%M') }}"
+                new_holder: "{{ user if next_state == 'borrowed' else '' }}"
+            - service: input_select.select_option
+              target:
+                entity_id: "{{ item_entity }}"
+              data:
+                option: "{{ next_state }}"
+            # Update holder: on borrow set the user, on return clear it.
+            - service: input_text.set_value
+              target:
+                entity_id: "{{ holder_entity }}"
+              data:
+                value: "{{ new_holder }}"
+            # Remember / clear the NFC UID bound to this borrow so the UI
+            # can tell "same card re-tapped" from "unrelated card tapped".
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ nfc_entity_safe != '' }}"
+                  sequence:
+                    - service: input_text.set_value
+                      target:
+                        entity_id: "{{ nfc_entity_safe }}"
+                      data:
+                        value: "{{ nfc_uid_safe if next_state == 'borrowed' else '' }}"
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.last_action
+              data:
+                value: "{{ message }}"
+            - service: logbook.log
+              data:
+                name: SmartLend
+                message: "{{ message }}"
+                entity_id: "{{ item_entity }}"
+            - continue_on_error: true
+              service: mqtt.publish
+              data:
+                topic: "smartlend/events/{{ item_entity.split('.')[1] }}"
+                payload: >
+                  {
+                    "item": "{{ item_label }}",
+                    "state": "{{ next_state }}",
+                    "action": "{{ verb }}",
+                    "user": "{{ user }}",
+                    "holder": "{{ new_holder }}",
+                    "ts": "{{ now().isoformat() }}"
+                  }
+                qos: 0
+                retain: false
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ next_state == 'borrowed' }}"
+                  sequence:
+                    - service: counter.increment
+                      target:
+                        entity_id: counter.borrow_count_today
+
+smartlend_toggle_usb_c_cable:
+  alias: "SmartLend - Toggle USB-C cable"
+  icon: mdi:usb-port
+  mode: single
+  fields:
+    user_hint:
+      description: "Optional: explicit borrower name to override input_select.borrower"
+      example: "Petr"
+    nfc_uid:
+      description: "Optional: NFC UID from the tap that triggered this action"
+      example: "6E-27-17-07"
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_usb_c_cable
+        item_label: "USB-C cable"
+        holder_entity: input_text.holder_usb_c_cable
+        nfc_entity: input_text.last_nfc_usb_c_cable
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_toggle_adapter:
+  alias: "SmartLend - Toggle adapter"
+  icon: mdi:power-plug
+  mode: single
+  fields:
+    user_hint:
+      description: "Optional: explicit borrower name"
+      example: "Jana"
+    nfc_uid:
+      description: "Optional: NFC UID from the tap that triggered this action"
+      example: "6E-27-17-07"
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_adapter
+        item_label: "Adapter"
+        holder_entity: input_text.holder_adapter
+        nfc_entity: input_text.last_nfc_adapter
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_toggle_meter:
+  alias: "SmartLend - Toggle meter"
+  icon: mdi:multimeter
+  mode: single
+  fields:
+    user_hint:
+      description: "Optional: explicit borrower name"
+      example: "Adam"
+    nfc_uid:
+      description: "Optional: NFC UID from the tap that triggered this action"
+      example: "6E-27-17-07"
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_meter
+        item_label: "Meter"
+        holder_entity: input_text.holder_meter
+        nfc_entity: input_text.last_nfc_meter
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_toggle_tripod:
+  alias: "SmartLend - Toggle tripod"
+  icon: mdi:camera-outline
+  mode: single
+  fields:
+    user_hint: { description: "Optional borrower", example: "Petr" }
+    nfc_uid: { description: "Optional NFC UID", example: "6E-27-17-07" }
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_tripod
+        item_label: "Stativ"
+        holder_entity: input_text.holder_tripod
+        nfc_entity: input_text.last_nfc_tripod
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_toggle_microphone:
+  alias: "SmartLend - Toggle microphone"
+  icon: mdi:microphone
+  mode: single
+  fields:
+    user_hint: { description: "Optional borrower", example: "Jana" }
+    nfc_uid: { description: "Optional NFC UID", example: "6E-27-17-07" }
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_microphone
+        item_label: "Mikrofon"
+        holder_entity: input_text.holder_microphone
+        nfc_entity: input_text.last_nfc_microphone
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_toggle_ring_light:
+  alias: "SmartLend - Toggle ring light"
+  icon: mdi:lightbulb-on-outline
+  mode: single
+  fields:
+    user_hint: { description: "Optional borrower", example: "Adam" }
+    nfc_uid: { description: "Optional NFC UID", example: "6E-27-17-07" }
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_ring_light
+        item_label: "Ring light"
+        holder_entity: input_text.holder_ring_light
+        nfc_entity: input_text.last_nfc_ring_light
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_toggle_hdmi_cable:
+  alias: "SmartLend - Toggle HDMI cable"
+  icon: mdi:hdmi-port
+  mode: single
+  fields:
+    user_hint: { description: "Optional borrower", example: "David" }
+    nfc_uid: { description: "Optional NFC UID", example: "6E-27-17-07" }
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_hdmi_cable
+        item_label: "HDMI kabel"
+        holder_entity: input_text.holder_hdmi_cable
+        nfc_entity: input_text.last_nfc_hdmi_cable
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_toggle_headphones:
+  alias: "SmartLend - Toggle headphones"
+  icon: mdi:headphones
+  mode: single
+  fields:
+    user_hint: { description: "Optional borrower", example: "Jana" }
+    nfc_uid: { description: "Optional NFC UID", example: "6E-27-17-07" }
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_headphones
+        item_label: "Sluchátka"
+        holder_entity: input_text.holder_headphones
+        nfc_entity: input_text.last_nfc_headphones
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_toggle_sd_reader:
+  alias: "SmartLend - Toggle SD card reader"
+  icon: mdi:sd
+  mode: single
+  fields:
+    user_hint: { description: "Optional borrower", example: "Adam" }
+    nfc_uid: { description: "Optional NFC UID", example: "6E-27-17-07" }
+  sequence:
+    - service: script.smartlend_toggle_item
+      data:
+        item_entity: input_select.item_sd_reader
+        item_label: "SD čtečka"
+        holder_entity: input_text.holder_sd_reader
+        nfc_entity: input_text.last_nfc_sd_reader
+        user_hint: "{{ user_hint | default('') }}"
+        nfc_uid: "{{ nfc_uid | default('') }}"
+
+smartlend_reset_all:
+  alias: "SmartLend - Reset all items to available"
+  description: "Force all items back to 'available', clear user, holders, and action log"
+  mode: single
+  sequence:
+    - service: input_select.select_option
+      target:
+        entity_id:
+          - input_select.item_usb_c_cable
+          - input_select.item_adapter
+          - input_select.item_meter
+          - input_select.item_tripod
+          - input_select.item_microphone
+          - input_select.item_ring_light
+          - input_select.item_hdmi_cable
+          - input_select.item_headphones
+          - input_select.item_sd_reader
+      data:
+        option: available
+    - service: input_text.set_value
+      target:
+        entity_id:
+          - input_text.holder_usb_c_cable
+          - input_text.holder_adapter
+          - input_text.holder_meter
+          - input_text.holder_tripod
+          - input_text.holder_microphone
+          - input_text.holder_ring_light
+          - input_text.holder_hdmi_cable
+          - input_text.holder_headphones
+          - input_text.holder_sd_reader
+          - input_text.last_nfc_usb_c_cable
+          - input_text.last_nfc_adapter
+          - input_text.last_nfc_meter
+          - input_text.last_nfc_tripod
+          - input_text.last_nfc_microphone
+          - input_text.last_nfc_ring_light
+          - input_text.last_nfc_hdmi_cable
+          - input_text.last_nfc_headphones
+          - input_text.last_nfc_sd_reader
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.last_action
+      data:
+        value: "All items reset"
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.active_user
+      data:
+        value: ""
+    - service: logbook.log
+      data:
+        name: SmartLend
+        message: "All items reset to available"
+
+smartlend_toggle_quiet_mode:
+  alias: "SmartLend - Toggle quiet mode"
+  mode: single
+  sequence:
+    - service: input_boolean.toggle
+      target:
+        entity_id: input_boolean.quiet_mode

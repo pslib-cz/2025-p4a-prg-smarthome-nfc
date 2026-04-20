@@ -1,0 +1,357 @@
+title: SmartLend
+views:
+  # ─────────── Overview: monitoring + interaction in one glance ───────────
+  - title: Overview
+    path: overview
+    icon: mdi:nfc-variant
+    type: sections
+    max_columns: 3
+    sections:
+      # ====== SECTION 1: Hero / headline stats ======
+      - type: grid
+        cards:
+          - type: heading
+            icon: mdi:nfc-variant
+            heading: SmartLend — NFC lending library
+            heading_style: title
+          - type: markdown
+            content: >
+              Step 1️⃣: Pick **who** is at the reader.
+              Step 2️⃣: **Tap** an NFC tag on the PN532 reader.
+              Unknown tag → 🔴 red.  Borrow → 🟢 green.  Return → 🔵 blue.
+          - type: tile
+            entity: input_select.borrower
+            name: "① Who is at the reader?"
+            icon: mdi:account-circle
+            color: purple
+            features:
+              - type: select-options
+          - type: markdown
+            content: >
+              ## 📟 Now active
+              **User:** {{ states('input_select.borrower') }}
+              **Last action:** {{ states('input_text.last_action') }}
+              **Last UID:** `{{ states('sensor.smartlend_nfc_last_nfc_tag') }}`
+              **LED ring:** {{ state_attr('light.smartlend_nfc_status_ring', 'rgb_color') or 'off' }}
+          - type: horizontal-stack
+            cards:
+              - type: tile
+                entity: counter.borrow_count_today
+                name: Borrows today
+                icon: mdi:counter
+                color: amber
+              - type: tile
+                entity: light.smartlend_nfc_status_ring
+                name: LED ring now
+                icon: mdi:led-on
+                color: yellow
+              - type: tile
+                entity: sensor.smartlend_nfc_last_nfc_tag
+                name: Last UID scanned
+                icon: mdi:tag-outline
+                color: indigo
+          - type: tile
+            entity: input_text.last_action
+            name: Last action (with name + time)
+            icon: mdi:clipboard-text-clock
+            color: teal
+
+      # ====== SECTION 2: Items (borrow/return) ======
+      - type: grid
+        cards:
+          - type: heading
+            icon: mdi:package-variant
+            heading: "② Items — borrow / return"
+            heading_style: title
+          - type: conditional
+            conditions:
+              - entity: input_select.item_usb_c_cable
+                state: borrowed
+            card:
+              type: markdown
+              content: >
+                ⚠️ **USB-C cable is currently BORROWED** — tap the chip to return it.
+          - type: tile
+            entity: input_select.item_usb_c_cable
+            name: USB-C cable (your chip)
+            icon: mdi:usb-port
+            color: green
+            features:
+              - type: select-options
+          - type: tile
+            entity: input_text.holder_usb_c_cable
+            name: Currently held by
+            icon: mdi:account-arrow-right
+            color: pink
+          - type: button
+            name: Toggle USB-C (dashboard)
+            icon: mdi:swap-horizontal-bold
+            tap_action:
+              action: call-service
+              service: script.smartlend_toggle_usb_c_cable
+          - type: tile
+            entity: input_select.item_adapter
+            name: Adapter
+            icon: mdi:power-plug
+            color: orange
+            features:
+              - type: select-options
+          - type: tile
+            entity: input_text.holder_adapter
+            name: Currently held by
+            icon: mdi:account-arrow-right
+            color: pink
+          - type: button
+            name: Toggle Adapter (dashboard)
+            icon: mdi:swap-horizontal-bold
+            tap_action:
+              action: call-service
+              service: script.smartlend_toggle_adapter
+          - type: tile
+            entity: input_select.item_meter
+            name: Meter
+            icon: mdi:multimeter
+            color: cyan
+            features:
+              - type: select-options
+          - type: tile
+            entity: input_text.holder_meter
+            name: Currently held by
+            icon: mdi:account-arrow-right
+            color: pink
+          - type: button
+            name: Toggle Meter (dashboard)
+            icon: mdi:swap-horizontal-bold
+            tap_action:
+              action: call-service
+              service: script.smartlend_toggle_meter
+
+          - type: heading
+            icon: mdi:pulse
+            heading: Live activity (last hour)
+            heading_style: subtitle
+          - type: logbook
+            hours_to_show: 1
+            entities:
+              - input_select.item_usb_c_cable
+              - input_select.item_adapter
+              - input_select.item_meter
+              - input_text.last_action
+              - counter.borrow_count_today
+              - input_select.borrower
+
+      # ====== SECTION 3: System control + LED ring ======
+      - type: grid
+        cards:
+          - type: heading
+            icon: mdi:cog
+            heading: System control
+            heading_style: title
+          - type: tile
+            entity: input_boolean.quiet_mode
+            name: Quiet mode
+            icon: mdi:volume-off
+            features:
+              - type: toggle
+          - type: tile
+            entity: input_select.system_mode
+            name: System mode
+            icon: mdi:tune
+            features:
+              - type: select-options
+          - type: button
+            name: Reset all to available
+            icon: mdi:refresh
+            icon_height: 36px
+            tap_action:
+              action: call-service
+              service: script.smartlend_reset_all
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Presentation
+                icon: mdi:presentation
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  service_data:
+                    entity_id: scene.smartlend_presentation_mode
+              - type: button
+                name: Maintenance
+                icon: mdi:wrench
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  service_data:
+                    entity_id: scene.smartlend_maintenance_mode
+
+          - type: heading
+            icon: mdi:led-on
+            heading: Status LED ring
+            heading_style: subtitle
+          - type: tile
+            entity: light.smartlend_nfc_status_ring
+            name: LED ring
+            features:
+              - type: light-brightness
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Green
+                icon: mdi:circle
+                icon_height: 36px
+                tap_action:
+                  action: call-service
+                  service: light.turn_on
+                  service_data:
+                    entity_id: light.smartlend_nfc_status_ring
+                    rgb_color: [0, 255, 0]
+                    brightness_pct: 30
+              - type: button
+                name: Blue
+                icon: mdi:circle
+                icon_height: 36px
+                tap_action:
+                  action: call-service
+                  service: light.turn_on
+                  service_data:
+                    entity_id: light.smartlend_nfc_status_ring
+                    rgb_color: [0, 80, 255]
+                    brightness_pct: 30
+              - type: button
+                name: Red
+                icon: mdi:circle
+                icon_height: 36px
+                tap_action:
+                  action: call-service
+                  service: light.turn_on
+                  service_data:
+                    entity_id: light.smartlend_nfc_status_ring
+                    rgb_color: [255, 0, 0]
+                    brightness_pct: 40
+              - type: button
+                name: Off
+                icon: mdi:power
+                icon_height: 36px
+                tap_action:
+                  action: call-service
+                  service: light.turn_off
+                  service_data:
+                    entity_id: light.smartlend_nfc_status_ring
+
+  # ─────────── Monitoring: history, logs, trends ───────────
+  - title: Monitoring
+    path: monitoring
+    icon: mdi:chart-line
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            icon: mdi:chart-timeline-variant
+            heading: Item state history
+            heading_style: title
+          - type: history-graph
+            hours_to_show: 24
+            entities:
+              - entity: input_select.item_usb_c_cable
+                name: USB-C cable
+              - entity: input_select.item_adapter
+                name: Adapter
+              - entity: input_select.item_meter
+                name: Meter
+
+          - type: heading
+            icon: mdi:chart-line-variant
+            heading: Borrow counter (7 days)
+            heading_style: title
+          - type: statistics-graph
+            chart_type: line
+            period: hour
+            days_to_show: 7
+            entities:
+              - entity: counter.borrow_count_today
+
+      - type: grid
+        cards:
+          - type: heading
+            icon: mdi:notebook
+            heading: Activity log
+            heading_style: title
+          - type: logbook
+            hours_to_show: 48
+            entities:
+              - input_select.item_usb_c_cable
+              - input_select.item_adapter
+              - input_select.item_meter
+              - input_text.active_user
+              - input_text.last_action
+              - counter.borrow_count_today
+              - light.smartlend_nfc_status_ring
+
+  # ─────────── Hardware: ESP + bridge diagnostics ───────────
+  - title: Hardware
+    path: hardware
+    icon: mdi:chip
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            icon: mdi:chip
+            heading: ESP32-C3 live telemetry
+            heading_style: title
+          - type: tile
+            entity: sensor.smartlend_nfc_wifi_signal
+            name: WiFi signal
+            icon: mdi:wifi
+            color: green
+          - type: tile
+            entity: sensor.smartlend_nfc_esp_internal_temperature
+            name: Chip temperature
+            icon: mdi:thermometer
+            color: red
+          - type: tile
+            entity: sensor.smartlend_nfc_uptime
+            name: Uptime
+            icon: mdi:timer-outline
+            color: blue
+          - type: tile
+            entity: sensor.smartlend_nfc_free_heap
+            name: Free RAM
+            icon: mdi:memory
+            color: purple
+          - type: tile
+            entity: sensor.smartlend_bridge_status
+            name: MQTT bridge
+            icon: mdi:bridge
+            color: teal
+
+          - type: heading
+            icon: mdi:wrench
+            heading: Device actions
+            heading_style: title
+          - type: button
+            name: Restart ESP32-C3
+            icon: mdi:restart
+            icon_height: 40px
+            tap_action:
+              action: call-service
+              service: button.press
+              service_data:
+                entity_id: button.smartlend_nfc_restart
+
+      - type: grid
+        cards:
+          - type: heading
+            icon: mdi:chart-areaspline
+            heading: Health trends (24 h)
+            heading_style: title
+          - type: history-graph
+            hours_to_show: 24
+            entities:
+              - entity: sensor.smartlend_nfc_wifi_signal
+              - entity: sensor.smartlend_nfc_esp_internal_temperature
+              - entity: sensor.smartlend_nfc_free_heap

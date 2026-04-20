@@ -1,240 +1,474 @@
-# Případová Studie Chytré Domácnosti / IoT v Home Assistantu
+# SmartLend - NFC pujcovna veci v Home Assistantu
 
-## Přehled
+SmartLend je lokalni IoT pripadova studie pro dvouclenny tym. Projekt simuluje pujcovnu skolnich/laboratornich pomucek: kabelu, adapteru, meraku, karet nebo jinych veci. Kazda vec ma NFC tag. Po prilozene tagu ke ctecce se v Home Assistantu zmeni stav veci, zapise se log a stav je videt na dashboardu.
 
-Tento projekt je zaměřen na vytvoření automatizačního systému postaveného na Home Assistantu, který bude simulovat realistické scénáře chytré domácnosti nebo neprůmyslového Internetu věcí.
+Primarni cil je provoz na notebooku. Raspberry Pi je jen zalozni varianta, pokud by notebook/virtualizace delaly problemy.
 
-Cílem je navrhnout a realizovat věrohodnou případovou studii, ve které budou senzory, akční členy, automatizace a dashboardy odpovídat reálnému použití. Celé řešení má být centrálně řízené z Home Assistantu bez závislosti na externím webovém serveru, databázi nebo podobné backendové službě.
+## Co mame podle fotek
 
-## Hlavní Cíl
+Fotky jsou ve slozce [`IMGS`](./IMGS/).
 
-Vytvořit realistickou případovou studii chytré domácnosti nebo IoT, ve které:
+Zapojeni je nakreslene v samostatnem SVG diagramu [`smartlend-zapojeni.svg`](./smartlend-zapojeni.svg) a PNG nahledu [`smartlend-zapojeni.png`](./smartlend-zapojeni.png).
 
-- Home Assistant funguje jako centrální řídicí bod.
-- Senzory a akční členy odpovídají zvolenému scénáři.
-- Automatizace jsou smysluplné a technicky obhajitelné.
-- Monitoring, logování a interakce uživatele jsou dostupné přes připojený webový klient nebo dashboard.
-- Je řešeno zabezpečení komunikace a autorizace.
+| Soucastka | Fotky | Pouziti v projektu |
+| --- | --- | --- |
+| ESP32-C3 SuperMini | [`IMG1.jpg`](./IMGS/IMG1.jpg), [`img2.jpg`](./IMGS/img2.jpg), [`img3.jpg`](./IMGS/img3.jpg), [`img4.jpg`](./IMGS/img4.jpg) | Wi-Fi zarizeni s ESPHome firmwarem. Cte NFC pres PN532 a posila udalosti do Home Assistantu. |
+| PN532 NFC modul | [`IMG5.jpg`](./IMGS/IMG5.jpg), [`IMG7.jpg`](./IMGS/IMG7.jpg) | NFC ctecka v rezimu I2C. Cte UID tagu a karet. |
+| WS2812B LED ring | [`IMG6.jpg`](./IMGS/IMG6.jpg) | Volitelna stavova indikace: zelena = vypujceno/OK, modra = vraceno, cervena = chyba. |
+| NFC samolepky a bila karta | [`Cable.jpg`](./IMGS/Cable.jpg) | Samolepky patri na veci. Bila karta muze byt karta uzivatele. |
+| Breadboard a Dupont kabely | [`Cable.jpg`](./IMGS/Cable.jpg) | Prototypove zapojeni bez plosneho spoje. |
 
-Příklady:
+## Splneni zadani pro N = 2
 
-- Pokud systém sleduje teplotu a vlhkost, měl by ovládat ventilátor, klimatizaci, topný člen nebo podobný relevantní akční prvek.
-- Pokud je simulováno řízení klimatu, je vhodné použít fyzicky odpovídající akční člen, například ventilátor, a ne nesouvisející LED diodu.
+| Pozadavek | Minimum | Nas navrh |
+| --- | --- | --- |
+| Lokalne integrace | 1 | ESPHome device v Home Assistantu |
+| Scenare | 2 | Borrow a Return |
+| Entity | 4 | Stav veci, posledni scan, posledni akce, LED ring, rezim, log |
+| Centralni rizeni | HA | Automatizace, helpery, logbook a dashboard v HA |
+| Web klient | Dashboard | Home Assistant dashboard v prohlizeci |
+| Zabezpeceni | TLS/SSL + autorizace | HA ucet, HTTPS pro HA, ESPHome API encryption |
 
-## Základní Požadavky
+## Koncept pouziti
 
-### Home Assistant jako Centrum Systému
+Priklad realne situace: ve skole nebo labu se pujcuji kabely, adaptery, meraky nebo kalkulacky. Bez evidence se veci ztraci. SmartLend to resi lokalne:
 
-Celý systém musí být řízen lokálně z Home Assistantu.
+1. Na kazdou vec nalepime jednu NFC samolepku.
+2. Volitelne pouzijeme bilou NFC kartu jako kartu cloveka.
+3. Uzivatel prilozi tag/kartu ke ctecce.
+4. ESP32-C3 pres PN532 precte UID tagu.
+5. ESPHome posle udalost do Home Assistantu.
+6. Home Assistant podle UID zmeni stav veci na `available` nebo `borrowed`.
+7. Dashboard ukaze aktualni stav a log akci.
 
-- Bez závislosti na externím webovém serveru.
-- Bez závislosti na externí databázi.
-- Preferovat integrace a add-ony Home Assistantu před externími aplikacemi.
-- Minimalizovat použití cloudových API, pokud existuje lokální alternativa.
+Zakladni demo muze fungovat jen s tagy veci: kazde prilozene veci prepina stav `available -> borrowed -> available`. Bonusova varianta pouzije bilou kartu jako identitu cloveka: nejdriv se pipne karta cloveka, potom tag veci.
 
-### Dashboard / Webový Klient
-
-Webový klient připojený k Home Assistantu by měl poskytovat:
-
-- monitoring
-- logování
-- rekonfiguraci
-- uživatelskou interakci se systémem
-
-Klient může k Home Assistantu přistupovat pomocí:
-
-- MQTT přes WebSocket
-- REST API přes HTTP
-
-V obou případech by mělo být řešeno zabezpečení komunikace, například:
-
-- TLS / SSL
-- autentizace a autorizace
-
-## Očekávání Od Případové Studie
-
-Samotný scénář je záměrně otevřený a má odrážet nápaditost realizačního týmu.
-
-Výsledná případová studie by měla:
-
-- co nejvíce odpovídat reálnému použití chytré domácnosti nebo IoT
-- používat vhodné senzory a akční členy
-- obsahovat více scén nebo scénářů
-- ukazovat praktickou automatizační logiku
-- řešit bezpečnost komunikace tam, kde je to relevantní
-
-## Požadavky Podle Velikosti Týmu
-
-Požadovaný rozsah závisí na počtu členů týmu `N`.
-
-### Minimální Počet Lokálních Integrací
-
-| Velikost týmu | Minimální počet lokálních integrací |
-| --- | --- |
-| `N < 3` | `1` |
-| `N > 2` | `N - 1` |
-
-### Minimální Počet Scén / Scénářů
-
-| Velikost týmu | Minimální počet scén |
-| --- | --- |
-| libovolné `N` | `N` |
-
-### Minimální Počet Entit
-
-| Velikost týmu | Minimální počet entit |
-| --- | --- |
-| `N = 1` | `3` |
-| ostatní `N` | `N * 2` |
-
-## Kritéria Hodnocení
-
-| Kritérium | Popis | Body |
-| --- | --- | ---: |
-| Použité integrace | Počet různých integrací a jejich vhodnost vzhledem ke scénáři | 10 |
-| Použité entity | Celkový počet entit v systému, například senzory a akční členy | 10 |
-| Kvalita / komplexita HW řešení | Správné zapojení, spolehlivost, nízká chybovost a udržitelnost návrhu | 10 |
-| Nápaditost a reálnost automatizací | Jak dobře projekt reflektuje reálné scénáře chytré domácnosti | 20 |
-| Unikátnost řešení | Inovativní přístup a originální nápady | 10 |
-| Dashboard pro monitoring a logování | Přehlednost, použitelnost a funkčnost dashboardu | 15 |
-| Dashboard pro interakci | Možnost uživatelského ovládání systému přes dashboard | 15 |
-| Zabezpečení komunikace a autorizace | Použití zabezpečených protokolů a řízení přístupu | 10 |
-
-**Maximální počet bodů: 100**
-
-Hodnocení bude založeno na funkčnosti, technické správnosti a originalitě řešení.
-
-## Doporučené Integrace pro Home Assistant
-
-Lokální integrace a add-ony, které jsou pro tento typ projektu zvlášť vhodné:
-
-- ESPHome
-- MQTT
-- Hardwario BCG
-- Local Tuya
-- Zigbee Home Automation (ZHA)
-- Zigbee2MQTT
-
-Další užitečné add-ony:
-
-- VS Code Server
-- Node-RED
-- MariaDB
-
-Možné externí integrace pro doplnění entit:
-
-- Sun
-- Generic Camera
-- Sensor.Community
-- Ping (ICMP)
-- Apple HomeKit Bridge
-- Google Assistant SDK
-- Discord
-- Minecraft Server
-- Epic Games Store
-- PrusaLink
-
-## Relevantní Hardware
-
-### Spotřebitelský Hardware
-
-Tuya kompatibilní Wi-Fi zařízení patří mezi nejdostupnější varianty spotřebitelského hardwaru.
-
-Poznámky:
-
-- Pokud je to možné, preferujte zařízení s lokálním ovládáním.
-- Zigbee varianty bývají dražší než Wi-Fi verze, protože komunikují přes IEEE 802.15.4 místo Wi-Fi.
-
-### DIY Hardware s ESPHome
-
-ESPHome umožňuje levně stavět senzory i akční členy například s použitím:
-
-- ESP8266
-- ESP32
-- modulů založených na ESP-01
-
-Příklady přímo připojitelných senzorů a akčních členů:
-
-- displeje
-- relé
-- LED ovladače
-- WS2812B pásky
-- RFID / NFC moduly
-- DC výkonové regulátory
-- environmentální senzory
-
-## Napájecí Požadavky
-
-Návrh napájení je potřeba řešit pečlivě, zejména u zařízení postavených na ESP8266 a ESP32.
-
-- ESP čipy běžně pracují v rozsahu `2.8V` až `3.3V`.
-- V některých případech lze přímo použít dvě alkalické AA baterie.
-- Vhodnou variantou může být také jeden LiFePO4 článek.
-- V ostatních případech je nutné použít step-down měnič.
-- Při napájení z USB nebo z Li-Ion / Li-Pol zdrojů je potřeba počítat s regulací napětí.
-
-U vývojových desek s ESP32:
-
-- deska obvykle obsahuje USB programovací obvod a stabilizátor z `5V` na `3.3V`
-- to často stačí pro mikrokontrolér a jeden až dva nízkopříkonové senzory
-- nestačí to pro energeticky náročné periferie, jako jsou motory, výkonné LED, větší počet LED nebo větší displeje
-
-## Návrhové Principy
-
-Projekt by měl dodržovat tyto principy:
-
-- Home Assistant je centrální bod pro sběr dat, řízení i prezentaci informací.
-- Lokální služby a protokoly mají přednost před cloudovými řešeními.
-- Add-ony a integrace Home Assistantu mají přednost před externími aplikacemi.
-- Implementace by měla co nejvěrněji kopírovat realitu.
-- Počet zařízení, protokolů a automatizací má odpovídat velikosti týmu.
-- Zabezpečení by mělo být maximalizováno na všech relevantních úrovních.
-
-## Doporučená Struktura Repozitáře
-
-Jakmile bude implementace růst, je vhodné držet repozitář přehledný a členěný podle odpovědností.
+## Architektura bez Raspberry Pi
 
 ```text
-.
-├── README.md
-├── docs/
-│   ├── architecture/
-│   ├── dashboard/
-│   └── security/
-├── home-assistant/
-│   ├── automations/
-│   ├── dashboards/
-│   ├── entities/
-│   └── scenes/
-├── firmware/
-│   ├── esphome/
-│   └── mcu/
-├── hardware/
-│   ├── diagrams/
-│   └── bill-of-materials/
-└── tests/
+NFC samolepka / bila karta
+        |
+        v
+PN532 NFC ctecka --I2C--> ESP32-C3 SuperMini --Wi-Fi--> Home Assistant OS ve VM na notebooku
+                                                            |
+                                                            v
+                                                Dashboard + logbook + automations
 ```
 
-## Implementační Checklist
+Notebook musi byt pri demu zapnuty a pripojeny do stejne Wi-Fi site jako ESP32. Home Assistant doporucuji spustit jako Home Assistant OS ve virtualnim stroji, protoze tato instalace ma Supervisor a add-ony. Cisty Home Assistant Container v Dockeru je pouzitelny, ale nema add-ony; ESPHome by se potom musel spoustet bokem.
 
-- definovat případovou studii a její realistický scénář použití
-- vybrat vhodné senzory a akční členy
-- připojit všechny entity do Home Assistantu
-- implementovat požadovaný počet lokálních integrací
-- vytvořit požadovaný počet scén a automatizací
-- připravit dashboard pro monitoring a logování
-- připravit dashboard pro uživatelskou interakci
-- zabezpečit komunikaci a přístup
-- zdokumentovat hardwarový návrh
-- otestovat chování systému a hraniční případy
+## Fyzicke zapojeni
 
-## Shrnutí
+Samostatne diagramy pro zapojeni:
 
-Projekt má dodat realistický, bezpečný a lokálně řízený systém chytré domácnosti nebo IoT postavený na Home Assistantu. Nejsilnější řešení budou kombinovat:
+- Krok 1 NFC: [`smartlend-krok1-nfc.svg`](./smartlend-krok1-nfc.svg), nahled [`smartlend-krok1-nfc.png`](./smartlend-krok1-nfc.png)
+- Krok 2 LED ring: [`smartlend-krok2-led-ring.svg`](./smartlend-krok2-led-ring.svg), nahled [`smartlend-krok2-led-ring.png`](./smartlend-krok2-led-ring.png)
+- Celkove schema: [`smartlend-zapojeni.svg`](./smartlend-zapojeni.svg), nahled [`smartlend-zapojeni.png`](./smartlend-zapojeni.png)
 
-- realistickou volbu hardwaru
-- smysluplnou automatizační logiku
-- čistou systémovou integraci
-- použitelné dashboardy
-- bezpečnou komunikaci
-- originální a technicky kvalitní návrh
+### Bezpecnost pred zapojenim
+
+- ESP32-C3 GPIO piny jsou pouze 3.3V logika. Nikdy na ne nepripojuj 5V signal.
+- PN532 napajej z `3V3`, ne z `5V`.
+- WS2812B ring napajej z `5V`, ne z `3V3`.
+- Vsechny moduly musi mit spolecnou zem `GND`.
+- Nezapinej LED ring na plny bily jas. Pro demo nastav jas max. 20-40 %.
+- Nepripojuj externi 5V zdroj na `5V` pin ESP32 zaroven s USB-C z notebooku.
+- Data z ESP (`GPIO3`) jsou 3.3V. To ring nespali, ale u 5V WS2812B to nemusi byt 100% spolehlive.
+- Pro nejjistejsi verzi dej mezi ESP a `IN` level shifter `74AHCT125`/`74HCT245`; pro kratke demo bez nej drzte kabel kratky.
+- Nejdriv zprovozni jen ESP32 + PN532. Ring pridej az po overeni NFC.
+
+### Orientace soucastek
+
+ESP32-C3 SuperMini dej pres stredovou mezeru breadboardu tak, aby kazda strana pinu byla v jine polovine breadboardu. Na vasem ESP32 je u USB-C na prave strane videt napajeni `5V`, `G`/`GND` a `3.3`/`3V3`. GPIO piny ber podle potisku na desce, ne podle cisel radku na breadboardu.
+
+PN532 pouzij na strane s piny `GND`, `VCC`, `SDA`, `SCL`. Na modulu nastav I2C rezim podle tabulky vytistene na desce. Na fotce je tabulka `HSU / I2C / SPI`; pro I2C je obvykle nastaveni DIP/prepinacu `1 0` (switch 1 ON, switch 2 OFF). Pokud ctecka v logu nebude videt, tohle je prvni vec ke kontrole.
+
+LED ring pouzivej na vstupni strane `GND`, `VCC`, `IN`. Druha strana `OUT`, `VCC`, `GND` je vystup pro dalsi ring a pro tento projekt se nepouziva.
+
+### Krok 1 - PN532 bez LED ringu
+
+Nejdriv zapoj jen NFC ctecku.
+
+| PN532 pin | ESP32-C3 pin | Popis | Dop. barva kabelu |
+| --- | --- | --- | --- |
+| `GND` | `GND` / `G` | spolecna zem | cerna |
+| `VCC` | `3V3` / `3.3` | napajeni PN532 | cervena |
+| `SDA` | `GPIO5` | I2C data | modra |
+| `SCL` | `GPIO6` | I2C clock | zluta |
+
+Schema:
+
+```text
+ESP32-C3 SuperMini        PN532
+-----------------        -----
+3V3 / 3.3          ---->  VCC
+GND / G            ---->  GND
+GPIO5              ---->  SDA
+GPIO6              ---->  SCL
+```
+
+Po zapojeni pripoj ESP32 pres USB-C do notebooku. V ESPHome logu musi byt videt I2C scan a PN532. PN532 miva na I2C typicky adresu `0x24`.
+
+### Krok 2 - pridani WS2812B LED ringu
+
+Ring pridej az po tom, co PN532 cte tagy.
+
+| LED ring pin | ESP32-C3 pin | Popis |
+| --- | --- | --- |
+| `GND` na vstupni strane | `GND` / `G` | spolecna zem |
+| `VCC` na vstupni strane | `5V` / `VBUS` | napajeni LED ringu |
+| `IN` na vstupni strane | `GPIO3` | data pro LED |
+
+Doporuceni pro stabilitu:
+
+- Mezi `GPIO3` a `IN` dej seriovy rezistor 330 ohm, pokud ho mate.
+- Mezi `5V` a `GND` u ringu dej kondenzator 470-1000 uF, pokud ho mate.
+- Nepouzivej `GPIO2` jako prvni volbu pro ring. U ESP32-C3 je to boot/strapping pin a muze zlobit pri startu.
+- Pokud ring nereaguje nebo blika spatne i pri spravne GND, problem muze byt 3.3V data do 5V ringu. Reseni je level shifter.
+
+Schema:
+
+```text
+ESP32-C3 SuperMini        WS2812B ring
+-----------------        ------------
+5V / VBUS          ---->  VCC
+GND / G            ---->  GND
+GPIO3              ---->  IN
+```
+
+## Instalace Home Assistantu na notebook
+
+Doporucena varianta pro skolni projekt je Home Assistant OS ve virtualnim stroji.
+
+1. Nainstaluj VirtualBox, VMware Workstation nebo Hyper-V podle systemu notebooku.
+2. Stahni Home Assistant OS image pro virtualizaci:
+   - Windows: `https://www.home-assistant.io/installation/windows/`
+   - Linux: `https://www.home-assistant.io/installation/linux/`
+   - obecne VM info: `https://developers.home-assistant.io/docs/operating-system/boards/ova`
+3. VM nastav minimalne na `2 GB RAM` a `2 vCPU`.
+4. Zapni UEFI/EFI boot.
+5. Sit VM nastav jako `Bridged Adapter`, ne NAT. ESP32 a HA pak budou ve stejne siti.
+6. Spust VM.
+7. Otevri v prohlizeci:
+
+```text
+http://homeassistant.local:8123
+```
+
+Pokud adresa nefunguje, zjisti IP adresu VM ve VirtualBox/VMware konzoli nebo v routeru a otevri:
+
+```text
+http://<IP_ADRESA_VM>:8123
+```
+
+8. Vytvor uzivatelsky ucet pro Home Assistant.
+9. V `Settings -> Add-ons -> Add-on Store` nainstaluj `ESPHome Device Builder`.
+10. Spust add-on a otevri jeho web UI.
+
+## ESPHome firmware pro ESP32-C3
+
+V ESPHome vytvor nove zarizeni `smartlend-nfc`. Po wizardu otevri YAML a uprav ho podle tohoto vzoru.
+
+```yaml
+substitutions:
+  device_name: smartlend-nfc
+  friendly_name: SmartLend NFC
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-c3-devkitm-1
+  variant: ESP32C3
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret smartlend_api_key
+
+ota:
+  - platform: esphome
+    password: !secret smartlend_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "SmartLend Fallback"
+    password: !secret smartlend_fallback_password
+
+captive_portal:
+
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+  frequency: 100kHz
+
+pn532_i2c:
+  id: pn532_board
+  update_interval: 1s
+  on_tag:
+    then:
+      - text_sensor.template.publish:
+          id: last_nfc_tag
+          state: !lambda "return x;"
+      - homeassistant.tag_scanned: !lambda "return x;"
+
+text_sensor:
+  - platform: template
+    name: "Last NFC Tag"
+    id: last_nfc_tag
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_ring
+    name: "Status Ring"
+    pin: GPIO3
+    num_leds: 24
+    rgb_order: GRB
+    chipset: WS2812
+    restore_mode: ALWAYS_OFF
+```
+
+Do ESPHome `secrets.yaml` dopln:
+
+```yaml
+wifi_ssid: "NAZEV_WIFI"
+wifi_password: "HESLO_WIFI"
+smartlend_api_key: "VYGENEROVANY_BASE64_KLIC"
+smartlend_ota_password: "SILNE_HESLO_PRO_OTA"
+smartlend_fallback_password: "SILNE_HESLO_FALLBACK_AP"
+```
+
+API encryption key nech vygenerovat ESPHome wizardem, pokud ho nabidne. Pokud klic generujes sam, musi to byt base64 hodnota ve formatu, ktery ESPHome prijima.
+
+## Prvni oziveni NFC
+
+1. Nech zapojeny jen ESP32 + PN532.
+2. V ESPHome dej `Validate`.
+3. Prvni flash proved pres USB-C.
+4. Po nahrani otevri `Logs`.
+5. Zkontroluj, ze I2C scan nasel PN532.
+6. Priloz NFC samolepku nebo bilou kartu.
+7. V logu hledej UID ve tvaru napr. `74-10-37-94`.
+8. Kazde UID si zapis do tabulky.
+
+Navrh mapovani tagu:
+
+| Typ tagu | Fyzicky tag | Navrh nazvu v HA |
+| --- | --- | --- |
+| Vec | kulata samolepka na USB-C kabelu | `USB-C Cable` |
+| Vec | kulata samolepka na adapteru | `Adapter` |
+| Vec | kulata samolepka na meraku/kalkulacce | `Meter` |
+| Uzivatel | bila karta | `User Card - David` nebo `User Card - Team` |
+
+## Home Assistant entity
+
+V HA vytvor helpery v `Settings -> Devices & services -> Helpers`.
+
+Minimum pro zadani:
+
+| Entity | Typ | Ucel |
+| --- | --- | --- |
+| `input_select.item_usb_c_cable` | Dropdown | stav USB-C kabelu: `available` / `borrowed` |
+| `input_select.item_adapter` | Dropdown | stav adapteru: `available` / `borrowed` |
+| `input_text.last_action` | Text | posledni akce pro dashboard |
+| `sensor.smartlend_nfc_last_nfc_tag` | ESPHome text sensor | posledni nactene UID |
+
+Doporucene entity navic:
+
+| Entity | Typ | Ucel |
+| --- | --- | --- |
+| `input_text.active_user` | Text | posledni nacteny uzivatel |
+| `input_select.system_mode` | Dropdown | `normal`, `maintenance`, `presentation` |
+| `input_boolean.quiet_mode` | Toggle | vypnuti zvukove signalizace, pokud pridate bzucak |
+| `light.smartlend_nfc_status_ring` | ESPHome light | stavova LED indikace |
+| `counter.borrow_count_today` | Counter | pocet pujcek za den |
+
+## Automatizace Borrow/Return
+
+Nejjednodussi varianta: kazdy tag veci prepina stav veci. Pokud je vec `available`, nacteni tagu znamena vypujceni. Pokud je `borrowed`, nacteni stejneho tagu znamena vraceni.
+
+Ukazka pro jeden tag veci:
+
+```yaml
+alias: "SmartLend - USB-C cable toggle"
+mode: single
+trigger:
+  - platform: tag
+    tag_id: "SEM_VLOZ_UID_TAGU_USB_C_KABELU"
+action:
+  - choose:
+      - conditions: "{{ is_state('input_select.item_usb_c_cable', 'available') }}"
+        sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.item_usb_c_cable
+            data:
+              option: borrowed
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.last_action
+            data:
+              value: "USB-C cable borrowed"
+          - action: logbook.log
+            data:
+              name: SmartLend
+              message: "USB-C cable borrowed"
+              entity_id: input_select.item_usb_c_cable
+          - action: light.turn_on
+            target:
+              entity_id: light.smartlend_nfc_status_ring
+            data:
+              rgb_color: [0, 255, 0]
+              brightness_pct: 25
+          - delay: "00:00:01"
+          - action: light.turn_off
+            target:
+              entity_id: light.smartlend_nfc_status_ring
+
+      - conditions: "{{ is_state('input_select.item_usb_c_cable', 'borrowed') }}"
+        sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.item_usb_c_cable
+            data:
+              option: available
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.last_action
+            data:
+              value: "USB-C cable returned"
+          - action: logbook.log
+            data:
+              name: SmartLend
+              message: "USB-C cable returned"
+              entity_id: input_select.item_usb_c_cable
+          - action: light.turn_on
+            target:
+              entity_id: light.smartlend_nfc_status_ring
+            data:
+              rgb_color: [0, 80, 255]
+              brightness_pct: 25
+          - delay: "00:00:01"
+          - action: light.turn_off
+            target:
+              entity_id: light.smartlend_nfc_status_ring
+```
+
+Pro dalsi veci zkopiruj automatizaci a zmen:
+
+- `tag_id`
+- `input_select.item_usb_c_cable`
+- texty `USB-C cable`
+
+Bonus pro bilou kartu uzivatele:
+
+1. Vytvor `input_text.active_user`.
+2. Automatizace pro bilou kartu nastavi `active_user` na jmeno.
+3. Automatizace veci zapise do `last_action` text typu `USB-C cable borrowed by David`.
+4. Po uspesnem Borrow/Return nastav `active_user` zpet na prazdnou hodnotu nebo `unknown`.
+
+## Dashboard
+
+V Home Assistantu vytvor dashboard `SmartLend`.
+
+Doporucene karty:
+
+- `Entities` karta: vsechny `input_select.item_*`.
+- `Entities` karta: `sensor.smartlend_nfc_last_nfc_tag`, `input_text.last_action`, `input_text.active_user`.
+- `History graph`: stavy pujcovanych veci.
+- `Logbook` nebo `Activity`: log udalosti SmartLend.
+- Tlacitko/skript `Reset all items to available`.
+- Ovladani `light.smartlend_nfc_status_ring` pro rucni test LED.
+
+## Zabezpeceni
+
+Minimum pro obhajobu:
+
+1. Home Assistant ma vlastni uzivatelske ucty a silne heslo.
+2. ESPHome pouziva `api.encryption.key`.
+3. OTA ma heslo.
+4. Tokeny ani hesla nejsou v JS souborech nebo verejne dokumentaci.
+5. Dashboard je dostupny jen v lokalni siti.
+
+HTTPS pro lokalni demo:
+
+1. V HA OS nainstaluj `Terminal & SSH` add-on.
+2. Vytvor self-signed certifikat:
+
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout /ssl/privkey.pem -out /ssl/fullchain.pem -days 365 -nodes -subj "/CN=homeassistant.local"
+```
+
+3. Do `configuration.yaml` pridej:
+
+```yaml
+http:
+  ssl_certificate: /ssl/fullchain.pem
+  ssl_key: /ssl/privkey.pem
+  ip_ban_enabled: true
+  login_attempts_threshold: 5
+```
+
+4. Restartuj Home Assistant.
+5. Otevrej:
+
+```text
+https://homeassistant.local:8123
+```
+
+Prohlizec muze hlasit varovani, protoze jde o self-signed certifikat. Pro skolni LAN demo je to prijatelne, pokud vysvetlite, ze komunikace je sifrovana, ale certifikat neni podepsany verejnou autoritou.
+
+## Demo scenar do skoly
+
+1. Otevrit dashboard SmartLend na notebooku.
+2. Ukazat, ze veci jsou `available`.
+3. Prilozit NFC samolepku `USB-C Cable`.
+4. Stav se zmeni na `borrowed`, LED blikne zelene, v logu pribude zaznam.
+5. Prilozit stejny tag znovu.
+6. Stav se zmeni na `available`, LED blikne modre, v logu pribude zaznam.
+7. Ukazat posledni UID/tag v ESPHome senzoru.
+8. Volitelne prilozit bilou kartu uzivatele a potom tag veci.
+9. Vysvetlit zabezpeceni: lokalni HA, ucet, HTTPS, ESPHome encryption.
+
+## Troubleshooting
+
+| Problem | Pravdepodobna pricina | Reseni |
+| --- | --- | --- |
+| ESPHome nevidi PN532 | PN532 neni v I2C rezimu | Nastav DIP/prepinace podle tabulky na PN532: I2C obvykle `1 0`. |
+| I2C scan nic nenajde | prohozene SDA/SCL nebo chybi GND | Zkontroluj `SDA -> GPIO5`, `SCL -> GPIO6`, spolecnou GND a napajeni 3V3. |
+| ESP32 se nepripoji k HA | VM je za NATem | Ve VM nastav sit na `Bridged Adapter`. |
+| Tag se nacte v logu, ale automatizace nereaguje | spatne UID v `tag_id` | Zkopiruj UID presne vcetne pomlcek. |
+| LED ring blika nahodne | dlouhe kabely, chybi GND, moc vysoky jas | Zkrat kabely, pridej spolecnou GND, sniz jas, pridej 330 ohm a kondenzator. |
+| ESP32 po pridani ringu nebootuje | data ringu jsou omylem na boot pinu nebo je spatne GND | Over, ze data ringu jdou na `GPIO3`, ne na `GPIO2`, a ze GND je spolecna. |
+| Notebook HA nejde otevrit | firewall nebo spatna IP | Zkus `http://<IP_VM>:8123`, povol port 8123, zkontroluj bridged sit. |
+
+## Zalozni varianta s Raspberry Pi
+
+Raspberry Pi pouzijte az jako posledni resort. Architektura projektu se tim nemeni, jen Home Assistant OS bezi na Raspberry Pi misto VM na notebooku.
+
+Postup:
+
+1. Flashnout Home Assistant OS na microSD.
+2. Spustit Raspberry Pi v LAN/Wi-Fi.
+3. Otevrit `http://homeassistant.local:8123`.
+4. Pokracovat stejne od instalace ESPHome add-onu.
+
+## Zdroje dohledane pres MCP web search a Context7
+
+- Home Assistant - Windows VM instalace: https://www.home-assistant.io/installation/windows/
+- Home Assistant - Linux VM/container instalace: https://www.home-assistant.io/installation/linux/
+- Home Assistant OS VM poznamky: https://developers.home-assistant.io/docs/operating-system/boards/ova
+- ESPHome Device Builder v HA: https://www.esphome.io/guides/getting_started_hassio.html
+- ESPHome PN532 NFC/RFID: https://esphome.io/components/binary_sensor/pn532.html
+- ESPHome ESP32 RMT LED Strip: https://esphome.io/components/light/esp32_rmt_led_strip/
+- ESP32-C3 SuperMini pinout reference pro overeni potisku: https://sudo.is/docs/esphome/boards/esp32c3supermini
+- Adafruit NeoPixel best practices: https://learn.adafruit.com/adafruit-neopixel-uberguide/best-practices
+- Adafruit NeoPixel level shifting: https://learn.adafruit.com/neopixel-levelshifter
+- WS2812B datasheet: https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf

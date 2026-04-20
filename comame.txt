@@ -1,0 +1,265 @@
+
+1) O co jde (1 věta)
+
+Postavíš lokální NFC půjčovnu věcí: přiložíš tag na věci k čtečce → Home Assistant to zaloguje a přepne stav věci na Vypůjčeno / Volné, plus ukáže stav na dashboardu (a volitelně rozsvítí LED ring).
+2) K čemu je která součástka
+
+    Raspberry Pi 5 + Home Assistant = centrální mozek, dashboard, logování, automatizace.
+
+    ESP32-C3 = “převodník” mezi světem HW a Home Assistantem (běží na něm ESPHome).
+
+    PN532 (NFC/RFID čtečka) = čte NFC tagy (NTAG213 nálepky).
+
+    NTAG213 nálepky = nalepíš na každou věc (kabel, kalkulačka…); každá má unikátní ID.
+
+    Breadboard + Dupont kabely = prototypování bez pájení (ALE: moduly obvykle musíte aspoň osadit piny).
+
+    WS2812B LED ring (NeoPixel) = stavová signalizace (OK/borrowed/error), hezky se to ukazuje.
+
+3) Než začneš: pájení a „piny“
+
+U tvých modulů z LaskaKitu typicky platí:
+
+    ESP32-C3 SuperMini: často bez připájených pinů
+
+    PN532: často bez připájených pinů
+
+    WS2812 ring: má pájecí plošky → musíš připájet dráty/piny vždy
+
+✅ Minimum pro funkční prototyp: připájet pin headery na ESP32 a PN532 + 3–4 dráty na ring.
+4) Zapojení (hardware)
+4.1 Doporučený způsob: PN532 přes I2C
+
+I2C je nejjednodušší (2 datové vodiče + napájení).
+A) Přepni PN532 do I2C režimu
+
+Na PN532 bývá:
+
+    přepínač, nebo
+
+    jumpery (SEL0/SEL1), nebo
+
+    pájecí propojky
+
+Cíl: I2C mód. (Poznáš i podle popisu na desce – často “I2C / SPI / HSU(UART)”).
+B) Zapoj PN532 ↔ ESP32-C3 (I2C)
+
+Obecně (typické názvy pinů na PN532):
+
+    PN532 VCC → ESP32 3V3
+
+    PN532 GND → ESP32 GND
+
+    PN532 SDA → ESP32 SDA pin
+
+    PN532 SCL → ESP32 SCL pin
+
+⚠️ Poznámka: u ESP32-C3 supermini se piny liší podle konkrétní desky.
+Nejčistší je:
+
+    kouknout na silk-screen popisky na desce (GPIO čísla u pinů)
+
+    a pak v ESPHome YAML nastavit sda: a scl: podle toho, co reálně používáš.
+
+✅ Když si nejsi jistý: vyber jakékoliv dva GPIO, které nejsou “speciální” (např. ne USB piny), a nastav je v ESPHome jako SDA/SCL. I2C na ESP32 je flexibilní.
+Napájení PN532
+
+Doporučuji PN532 napájet 3.3V, aby data byla 3.3V kompatibilní.
+4.2 Zapoj WS2812 ring ↔ ESP32
+
+Ring má obvykle 4 plošky: 5V, GND, DIN, DOUT (použiješ jen 5V, GND, DIN).
+
+    Ring 5V → 5V (z USB / 5V pin na ESP / Pi USB zdroj)
+
+    Ring GND → GND (společná zem s ESP32)
+
+    Ring DIN → jeden GPIO na ESP32 (např. GPIO2 nebo jiný volný)
+
+⚠️ DŮLEŽITÉ:
+
+    GND musí být společné (ring i ESP i PN532).
+
+    Ring může brát hodně proudu → na demo omez jas.
+
+Doporučené drobnosti (ne povinné, ale super):
+
+    rezistor 330Ω do vodiče DIN
+
+    kondenzátor 470–1000µF mezi 5V a GND u ringu
+
+5) ESPHome: jak to rozchodit krok za krokem
+5.1 V HA nainstaluj ESPHome
+
+Home Assistant → Add-ons → ESPHome → Install → Start.
+5.2 Přidej nové zařízení (ESP32)
+
+ESPHome → New device → vyber ESP32-C3 (nebo obecně ESP32, pak upravíš).
+5.3 Minimální ESPHome konfigurace (logika)
+
+Cíl: aby ESP32 posílalo do HA událost “načten tag”.
+
+ESPHome má pro PN532 podporu. Pro půjčovnu ti stačí:
+
+    I2C definice
+
+    PN532 komponenta
+
+    trigger při načtení tagu (UID)
+
+Níže je typická šablona (piny si uprav podle tvé desky):
+
+esphome:
+  name: nfc-pujcovna
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+wifi:
+  ssid: "TVA_WIFI"
+  password: "HESLO"
+
+logger:
+
+api:
+  encryption:
+    key: "VYGENERUJ_V_ESPHOME"
+
+ota:
+
+# I2C sběrnice - uprav sda/scl na GPIO, které použiješ
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+
+# PN532 (I2C)
+pn532_i2c:
+  id: pn532_board
+
+# Tag reader → posílá tag do Home Assistantu jako event
+binary_sensor:
+  - platform: pn532
+    uid: 04-AB-CD-EF-12-34-56
+    name: "TAG USB-C KABEL"
+    on_press:
+      - homeassistant.event:
+          event: nfc_scan
+          data:
+            item: "usb_c_kabel"
+
+# NeoPixel ring
+light:
+  - platform: neopixelbus
+    type: GRB
+    variant: WS2812
+    pin: GPIO2
+    num_leds: 24
+    name: "NFC Ring"
+
+Jak se to dělá prakticky (rychleji)
+
+    Nejdřív nahraj ESPHome bez binary_sensor pro konkrétní UID, jen ať PN532 běží.
+
+    V logu ESPHome uvidíš UID každého přiložení → UID pak přepíšeš do YAML.
+
+    Pokud se UID v logu neukazuje, obvykle je problém: špatný mód PN532 (ne I2C), špatné SDA/SCL piny, nebo napájení.
+
+6) Home Assistant: logika “půjčit / vrátit”
+Nejjednodušší model (doporučuju na start)
+
+1 tag = 1 věc
+Každá věc má entitu input_select, hodnoty: available, borrowed.
+6.1 Vytvoř entity
+
+Home Assistant → Settings → Devices & services → Helpers → Create helper:
+
+    Input select → např. usb_c_kabel_state
+
+    options: available, borrowed
+
+    default: available
+
+(udělej 2–5 věcí, ať je to hezké)
+6.2 Automatizace: přepínání stavu po scan tagu
+
+Home Assistant → Automations → Create
+
+Trigger: Event
+
+    event type: nfc_scan
+
+    event data: item: usb_c_kabel
+
+Action:
+
+    If state je available → nastav na borrowed
+
+    else → nastav na available
+
+    logbook entry / persistent notification (volitelné)
+
+    nastav LED ring barvu (volitelné)
+
+Tím máš hned 2 scénáře:
+
+    Borrow (available→borrowed)
+
+    Return (borrowed→available)
+
+7) Dashboard (aby to splnilo monitoring + logování + interakci)
+
+Vytvoř nový Dashboard “Půjčovna” a dej tam:
+Sekce Stav věcí (monitoring)
+
+    Entities card: seznam všech *_state
+
+    vedle toho “Last scanned” (můžeš si držet v input_text.last_scan)
+
+Sekce Ovládání (interakce)
+
+    tlačítko “Reset vše na available”
+
+    přepínač “Quiet mode” (vypne pípání/LED)
+
+Sekce Logování
+
+    Logbook card (uvidíš “scan → borrowed/returned”)
+
+    History graph (kolikrát se měnily stavy)
+
+8) Časté problémy (rychlé řešení)
+PN532 nic nečte
+
+    zkontroluj mód (I2C!)
+
+    zkontroluj SDA/SCL piny + i2c: scan: true (musí najít zařízení)
+
+    zkontroluj napájení 3.3V + GND
+
+WS2812 nesvítí / bliká
+
+    společná GND s ESP
+
+    zkus snížit jas / nesviť full white
+
+    přidej rezistor 330Ω na DIN
+
+    některé ringy potřebují opravdu stabilní 5V
+
+ESP32-C3 se nechce flashnout
+
+    použij kvalitní USB-C kabel (některé jsou jen “nabíjecí”)
+
+    zmáčkni BOOT při flashi (podle desky)
+
+9) Co máte říct při obhajobě (krátce)
+
+    “Lokální integrace: ESPHome (ESP32 + PN532)”
+
+    “2 scénáře: vypůjčení a vrácení (plus chybový stav)”
+
+    “Dashboard: monitoring stavu + logbook + ovládání reset/quiet”
+
+    “Bezpečnost: HA user accounts + HTTPS, ESPHome API encryption”

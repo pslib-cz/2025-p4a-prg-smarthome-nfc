@@ -1,0 +1,33 @@
+Podle toho diagramu odpoj z červené NFC desky jen tyhle dva datové kabely:
+
+  modrý  = TXD
+  žlutý  = RXD
+
+  Nech zapojené:
+
+  černý  = GND
+  červený = VCC / 3.3V
+
+  Pak pro loopback test udělej toto:
+
+  1. Odpoj USB.
+  2. Vytáhni modrý a žlutý kabel z červené NFC desky.
+  3. Druhé konce těch kabelů nech v ESP, kde jsou teď:
+
+     modrý v ESP pin 5
+     žlutý v ESP pin 6
+  4. Volné konce modrého a žlutého propoj spolu.
+     Prakticky: dej je do stejné řady na breadboardu, aby se elektricky dotýkaly.
+
+  Výsledek má být:
+
+  ESP pin 5 <-> ESP pin 6
+
+  Červená NFC bude mít pro test klidně pořád napájení:
+
+  černý GND
+  červený VCC
+
+  ale datově bude odpojená.
+
+  Hlavně nepropoj modrý/žlutý s 5V, 3.3V, GND ani červeným/černým kabelem. Jen modrý se žlutým.

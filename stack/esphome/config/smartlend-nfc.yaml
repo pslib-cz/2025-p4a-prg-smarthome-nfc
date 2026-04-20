@@ -1,0 +1,197 @@
+substitutions:
+  device_name: smartlend-nfc
+  friendly_name: SmartLend NFC
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    priority: -100
+    then:
+      # Force LED ring to dark black on boot — WS2812s without valid data
+      # come up with uninitialized pixels (usually white). This sends a clean
+      # "all off" frame so the ring doesn't sit at uninit-white after reset.
+      - light.turn_on:
+          id: status_ring
+          brightness: 1%
+          red: 0
+          green: 0
+          blue: 0
+          transition_length: 0s
+      - delay: 100ms
+      - light.turn_off:
+          id: status_ring
+
+esp32:
+  board: esp32-c3-devkitm-1
+  variant: ESP32C3
+  framework:
+    type: arduino
+
+logger:
+  level: VERBOSE
+  logs:
+    pn532: VERBOSE
+    pn532_i2c: VERBOSE
+    i2c: VERBOSE
+    component: DEBUG
+
+# Encrypted native API connection to Home Assistant.
+api:
+  encryption:
+    key: !secret smartlend_api_key
+  reboot_timeout: 15min
+
+ota:
+  - platform: esphome
+    password: !secret smartlend_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # iPhone hotspot compatibility: keep the radio simple and avoid current spikes.
+  power_save_mode: NONE
+  fast_connect: true
+  output_power: 10dB
+  enable_rrm: false
+  enable_btm: false
+  reboot_timeout: 0s
+  on_connect:
+    - logger.log: "Wi-Fi connected"
+  on_disconnect:
+    - logger.log: "Wi-Fi disconnected"
+  ap:
+    ssid: "SmartLend Fallback"
+    password: !secret smartlend_fallback_password
+
+captive_portal:
+
+# I2C mode — PN532 DIP switches must be set to I2C: channel 1 ON, channel 2 OFF
+# Wiring (unchanged from HSU — same physical pins):
+#   PN532 SDA  -> ESP GPIO5
+#   PN532 SCL  -> ESP GPIO6
+#   PN532 VCC  -> ESP 3.3V
+#   PN532 GND  -> ESP GND
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true          # log all I2C devices found — PN532 expected at 0x24 or 0x48
+  frequency: 100kHz
+  id: pn532_i2c_bus
+
+pn532_i2c:
+  id: pn532_board
+  update_interval: 500ms
+  on_tag:
+    then:
+      - logger.log:
+          format: "🎉 CARD SCANNED UID=%s"
+          args: ['x.c_str()']
+      # Publish UID to text_sensor so dashboard shows "Last UID scanned"
+      - text_sensor.template.publish:
+          id: last_nfc_tag
+          state: !lambda "return x;"
+      # Fire tag_scanned to HA — HA picks the LED color:
+      #   known tag matched → green (borrow) / blue (return) via state-change automation
+      #   unknown tag → red via "LED red on unknown tag" automation
+      #   denied return attempt → red via toggle_item script DENIED branch
+      - homeassistant.tag_scanned: !lambda "return x;"
+
+text_sensor:
+  - platform: template
+    name: "Last NFC Tag"
+    id: last_nfc_tag
+    icon: mdi:tag-outline
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi signal"
+    update_interval: 5s
+    id: wifi_rssi
+  - platform: uptime
+    name: "Uptime"
+    id: uptime_sec
+  - platform: internal_temperature
+    name: "ESP internal temperature"
+    id: esp_temp
+    update_interval: 5s
+  - platform: debug
+    free:
+      name: "Free heap"
+      id: heap_free
+    loop_time:
+      name: "Loop time"
+
+debug:
+  update_interval: 5s
+
+# LED ring diagnostic: cycle through RED, GREEN, BLUE, WHITE with LOGGING.
+# If user sees ANY color, ring is alive (even if rgb_order is wrong).
+# If nothing at all — wire to ring is broken or ring is dead.
+interval:
+  # Power / health heartbeat every 5 seconds.
+  - interval: 5s
+    then:
+      - lambda: |-
+          int heap = ESP.getFreeHeap();
+          int rssi = (int) id(wifi_rssi).state;
+          uint32_t uptime_s = millis() / 1000;
+          uint8_t reason = esp_reset_reason();
+          const char* rr = "?";
+          switch (reason) {
+            case ESP_RST_POWERON:   rr = "POWERON"; break;
+            case ESP_RST_EXT:       rr = "EXT_RESET"; break;
+            case ESP_RST_SW:        rr = "SOFTWARE"; break;
+            case ESP_RST_PANIC:     rr = "PANIC/CRASH"; break;
+            case ESP_RST_INT_WDT:   rr = "INT_WDT"; break;
+            case ESP_RST_TASK_WDT:  rr = "TASK_WDT"; break;
+            case ESP_RST_WDT:       rr = "WDT"; break;
+            case ESP_RST_DEEPSLEEP: rr = "DEEPSLEEP"; break;
+            case ESP_RST_BROWNOUT:  rr = "BROWNOUT-VOLTAGE-DROP"; break;
+            default: rr = "UNKNOWN"; break;
+          }
+          ESP_LOGW("HEALTH", "uptime=%us | heap=%d B | WiFi=%d dBm | last_reset=%s", uptime_s, heap, rssi, rr);
+          if (reason == ESP_RST_BROWNOUT)
+            ESP_LOGE("HEALTH", "  !! LAST RESET WAS BROWNOUT — POWER SUPPLY TOO WEAK!");
+          if (uptime_s < 20)
+            ESP_LOGW("HEALTH", "  !! Recent reboot — may be unstable power");
+          if (heap < 30000)
+            ESP_LOGE("HEALTH", "  !! Low heap (<30kB)");
+
+
+button:
+  - platform: restart
+    name: "Restart"
+
+# WS2812B ring wiring (bottom/input triplet on the ring PCB — the row
+# that reads IN / VCC / GND, NOT the OUT row on the opposite side):
+#   ESP GND        -> ring GND  (bottom)
+#   ESP 5V / VBUS  -> ring VCC  (bottom)
+#   ESP GPIO3 --[330 ohm]--> ring IN (bottom)
+#
+# Why GPIO3: GPIO2 is a strapping/boot pin on ESP32-C3; a high level on
+# it at reset can block booting. GPIO3 is safe.
+#
+# Logic level note: ESP outputs 3.3 V on the data pin while WS2812B runs
+# on 5 V. Short breadboard wiring usually works, but for a rock-solid
+# build use a level shifter (74AHCT125 or 74HCT245) between GPIO3 and IN.
+#
+# Current note: 24 LEDs at full white pull ~1.4 A from USB-C — that
+# browns out the ESP32. Effect caps brightness at 40 % and the HA
+# automation uses 30 %.
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_ring
+    name: "Status Ring"
+    pin: GPIO3
+    num_leds: 24
+    rgb_order: GRB
+    chipset: WS2812
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 100ms
+    gamma_correct: 2.2
+    effects:
+      - pulse:
+          name: "Safe pulse"
+          min_brightness: 0%
+          max_brightness: 40%

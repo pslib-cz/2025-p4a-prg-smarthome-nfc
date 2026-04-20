@@ -1,0 +1,47 @@
+# Secrets / credentials
+stack/.env
+stack/SECRETS.md
+stack/homeassistant/config/secrets.yaml
+stack/esphome/config/secrets.yaml
+stack/ssl/*.pem
+stack/ssl/*.key
+stack/mosquitto/config/passwd
+
+# Runtime / generated state
+stack/homeassistant/config/.storage/
+stack/homeassistant/config/*.log
+stack/homeassistant/config/*.log.*
+stack/homeassistant/config/home-assistant_v2.db*
+stack/homeassistant/config/.cache/
+stack/homeassistant/config/.cloud/
+stack/homeassistant/config/deps/
+stack/homeassistant/config/blueprints/
+stack/homeassistant/config/tts/
+stack/homeassistant/config/*.lock
+stack/homeassistant/config/.HA_VERSION
+stack/esphome/config/.esphome/
+stack/mosquitto/data/
+stack/mosquitto/log/
+logs/
+excalidraw.log
+
+# Node / Next.js
+stack/ui/node_modules/
+stack/ui/.next/
+stack/ui/out/
+npm-debug.log*
+yarn-debug.log*
+
+# Session artifacts
+.claude/
+.playwright-mcp/
+ui-after-http.png
+ui-final.png
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/

@@ -1,0 +1,73 @@
+homeassistant:
+  name: SmartLend
+  unit_system: metric
+  temperature_unit: C
+  time_zone: Europe/Prague
+  currency: CZK
+  country: CZ
+  external_url: "https://homeassistant.local:8123"
+  internal_url: "https://172.20.10.7:8123"
+  packages: !include_dir_named packages
+
+default_config:
+
+http:
+  server_host: 0.0.0.0
+  server_port: 8123
+  # TLS disabled for the kiosk UI demo — self-signed certs break browser WS.
+  # Per-layer security retained: ESPHome API encryption + MQTT TLS on 8883.
+  # For production, put a reverse proxy with a trusted cert in front.
+  # ssl_certificate: /ssl/fullchain.pem
+  # ssl_key: /ssl/privkey.pem
+  ip_ban_enabled: true
+  login_attempts_threshold: 5
+  cors_allowed_origins:
+    - "http://localhost:3001"
+    - "http://127.0.0.1:3001"
+    - "http://192.168.1.212:3001"
+  use_x_frame_options: false
+
+logger:
+  default: info
+  logs:
+    homeassistant.components.mqtt: info
+    homeassistant.components.tag: info
+
+recorder:
+  purge_keep_days: 30
+  include:
+    domains:
+      - input_select
+      - input_text
+      - input_boolean
+      - counter
+      - sensor
+      - light
+      - tag
+    entity_globs:
+      - sensor.smartlend_*
+      - light.smartlend_*
+
+mqtt:
+  # Connection is provisioned via the UI (Settings → Devices & Services → MQTT).
+  # Broker: 127.0.0.1:1883, user "smartlend". See secrets.yaml for password.
+  sensor:
+    - name: "SmartLend bridge status"
+      unique_id: smartlend_bridge_status
+      state_topic: smartlend/bridge/status
+      expire_after: 120
+      icon: mdi:bridge
+
+lovelace:
+  mode: storage
+  dashboards:
+    smartlend-yaml:
+      mode: yaml
+      title: SmartLend
+      icon: mdi:nfc-variant
+      show_in_sidebar: true
+      filename: dashboards/smartlend.yaml
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml

@@ -1,0 +1,13 @@
+.env
+SECRETS.md
+ssl/*.pem
+ssl/*.key
+mosquitto/data/
+mosquitto/log/
+mosquitto/config/passwd
+homeassistant/config/.storage/
+homeassistant/config/home-assistant_v2.db*
+homeassistant/config/*.log
+homeassistant/config/secrets.yaml
+esphome/config/secrets.yaml
+esphome/config/.esphome/
