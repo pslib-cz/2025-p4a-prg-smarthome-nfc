@@ -14,14 +14,16 @@ default_config:
 http:
   server_host: 0.0.0.0
   server_port: 8123
-  # TLS disabled for the kiosk UI demo — self-signed certs break browser WS.
-  # Per-layer security retained: ESPHome API encryption + MQTT TLS on 8883.
-  # For production, put a reverse proxy with a trusted cert in front.
-  # ssl_certificate: /ssl/fullchain.pem
-  # ssl_key: /ssl/privkey.pem
+  # TLS enabled — satisfies the rubric's zabezpečení requirement. Self-signed
+  # cert, so the browser has to accept it once at https://localhost:8123 before
+  # the kiosk WebSocket can connect.
+  ssl_certificate: /ssl/fullchain.pem
+  ssl_key: /ssl/privkey.pem
   ip_ban_enabled: true
   login_attempts_threshold: 5
   cors_allowed_origins:
+    - "https://localhost:3001"
+    - "https://127.0.0.1:3001"
     - "http://localhost:3001"
     - "http://127.0.0.1:3001"
     - "http://192.168.1.212:3001"

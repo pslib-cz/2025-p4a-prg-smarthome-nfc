@@ -100,3 +100,13 @@ export async function resetAllItems() {
     service_data: {},
   });
 }
+
+export async function triggerAutomation(entityId: string) {
+  const conn = await getConnection();
+  await conn.sendMessagePromise({
+    type: "call_service",
+    domain: "automation",
+    service: "trigger",
+    service_data: { entity_id: entityId },
+  });
+}

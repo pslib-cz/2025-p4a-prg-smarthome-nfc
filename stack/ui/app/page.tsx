@@ -11,6 +11,7 @@ import {
   resetBorrowerToUnassigned,
   resetAllItems,
   previewLed,
+  triggerAutomation,
 } from "@/lib/ha-client";
 
 type ModalMode = null | "identity" | "item" | "confirm-return" | "result" | "denied";
@@ -51,6 +52,9 @@ export default function Home() {
   // Last scanned NFC UID — threaded into the toggle script call so HA can
   // remember which card borrowed which item (used by smart-return matching).
   const lastTagIdRef = useRef<string>("");
+  // Mirror of quiet_mode so onTagScanned ([] deps) can scale LED brightness
+  // without re-subscribing on every state tick.
+  const quietModeRef = useRef<boolean>(false);
 
   function addLog(kind: LogEntry["kind"], text: string) {
     setLogs((prev) => [{ ts: new Date(), kind, text }, ...prev].slice(0, 80));
@@ -142,7 +146,7 @@ export default function Home() {
         );
         setPendingReturnItem(matchedBorrow);
         setModalMode("confirm-return");
-        previewLed([0, 120, 255], 35).catch(() => {});
+        previewLed([0, 120, 255], quietModeRef.current ? 5 : 35).catch(() => {});
         return;
       }
       if (borrowed.length > 0) {
@@ -183,6 +187,8 @@ export default function Home() {
         addLog("borrow", la);
       } else if (la.includes("returned")) {
         addLog("return", la);
+      } else if (la.includes("Quiet mode")) {
+        addLog("info", la);
       }
     }
   }, [entities["input_text.last_action"]?.state]);
@@ -201,6 +207,9 @@ export default function Home() {
   const borrower = entities["input_select.borrower"]?.state ?? "Unassigned";
   const espTemp = entities["sensor.smartlend_nfc_esp_internal_temperature"]?.state;
   const wifiSig = entities["sensor.smartlend_nfc_wifi_signal"]?.state;
+  const quietMode = entities["input_boolean.quiet_mode"]?.state === "on";
+  quietModeRef.current = quietMode;
+  const sunState = entities["sun.sun"]?.state;
 
   async function handlePickIdentity(name: string) {
     addLog("info", `handlePickIdentity: ${name}`);
@@ -225,8 +234,10 @@ export default function Home() {
     if (item.state === "borrowed") {
       setPendingReturnItem(item);
       setModalMode("confirm-return");
-      previewLed([0, 120, 255], 35)
-        .then(() => addLog("info", "previewLed(blue) ok"))
+      // Scale brightness by quiet_mode so we don't blast the LED at night.
+      const b = quietMode ? 5 : 35;
+      previewLed([0, 120, 255], b)
+        .then(() => addLog("info", `previewLed(blue) at ${b}% ok`))
         .catch((err: any) => addLog("error", `previewLed failed: ${err?.message || err}`));
       return;
     }
@@ -299,6 +310,19 @@ export default function Home() {
     addLog("info", "🔄 Reset all items");
   }
 
+  async function handleSunTest(kind: "sunset" | "sunrise") {
+    const automationId =
+      kind === "sunset"
+        ? "automation.smartlend_quiet_mode_on_after_sunset"
+        : "automation.smartlend_quiet_mode_off_at_sunrise";
+    addLog("info", `🖱 Demo ${kind} → ${automationId}`);
+    try {
+      await triggerAutomation(automationId);
+    } catch (err: any) {
+      addLog("error", `Demo ${kind} failed: ${err?.message || err}`);
+    }
+  }
+
   function handleCancel() {
     addLog("info", `Cancel from modal=${modalMode ?? "none"}`);
     setModalMode(null);
@@ -341,6 +365,12 @@ export default function Home() {
                 <div className="text-xl font-semibold text-gray-300">{parseFloat(wifiSig).toFixed(0)} dBm</div>
               </div>
             )}
+            <div className="text-right" title={`sun.sun = ${sunState ?? "unknown"}`}>
+              <div className="text-xs text-gray-400 uppercase">Režim</div>
+              <div className={`text-xl font-semibold ${quietMode ? "text-info" : "text-ok"}`}>
+                {quietMode ? "🌙 Quiet" : "☀️ Active"}
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <div
                 className={`h-3 w-3 rounded-full ${
@@ -351,13 +381,29 @@ export default function Home() {
                 {connected ? `HA · ${entityCount} ent` : "offline"}
               </span>
             </div>
-            <button
-              onClick={handleResetAll}
-              className="px-4 py-2 rounded-lg bg-warn/20 border border-warn/40 text-warn text-sm font-semibold hover:bg-warn/30 transition"
-              title="Reset all items to available"
-            >
-              🔄 Reset
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleSunTest("sunset")}
+                className="px-3 py-2 rounded-lg bg-info/15 border border-info/40 text-info text-sm font-semibold hover:bg-info/25 transition"
+                title="Demo: trigger the sunset automation (enables quiet_mode)"
+              >
+                🌙 Západ
+              </button>
+              <button
+                onClick={() => handleSunTest("sunrise")}
+                className="px-3 py-2 rounded-lg bg-warn/15 border border-warn/40 text-warn text-sm font-semibold hover:bg-warn/25 transition"
+                title="Demo: trigger the sunrise automation (disables quiet_mode)"
+              >
+                ☀️ Východ
+              </button>
+              <button
+                onClick={handleResetAll}
+                className="px-4 py-2 rounded-lg bg-warn/20 border border-warn/40 text-warn text-sm font-semibold hover:bg-warn/30 transition"
+                title="Reset all items to available"
+              >
+                🔄 Reset
+              </button>
+            </div>
           </div>
         </header>
 

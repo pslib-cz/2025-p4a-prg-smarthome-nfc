@@ -5,6 +5,76 @@
 # the shared script without those fields, which both raced the UI and raised
 # `holder_entity is undefined` errors.
 
+# ─── Day/night automation via the Sun integration ───
+# The atelier is used mainly during daylight. After sunset we silence the
+# LED ring (quiet_mode on) so the kiosk doesn't light up an empty room all
+# night; at sunrise we re-enable visual feedback for the working day.
+
+- id: smartlend_quiet_on_sunset
+  alias: "SmartLend - Quiet mode on after sunset"
+  description: "Silence the status ring after sunset so the empty atelier stays dark. Also fires a short orange LED flash so a manual demo trigger is visible even when quiet_mode was already on."
+  mode: single
+  trigger:
+    - platform: sun
+      event: sunset
+      offset: "+00:30:00"
+  action:
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.quiet_mode
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.last_action
+      data:
+        value: "🌙 Quiet mode ON (sunset +30 min) · {{ now().strftime('%H:%M:%S') }}"
+    # Short sunset-colored LED cue. Bypasses quiet_mode on purpose — this is
+    # the ONE LED hit that represents the sunset event itself.
+    - service: light.turn_on
+      target:
+        entity_id: light.smartlend_nfc_status_ring
+      data:
+        rgb_color: [255, 90, 0]
+        brightness_pct: 35
+    - delay: "00:00:01.2"
+    - service: light.turn_off
+      target:
+        entity_id: light.smartlend_nfc_status_ring
+    - service: logbook.log
+      data:
+        name: SmartLend
+        message: "Quiet mode activated after sunset"
+
+- id: smartlend_quiet_off_sunrise
+  alias: "SmartLend - Quiet mode off at sunrise"
+  description: "Re-enable LED feedback at sunrise for the working day. Yellow LED cue confirms the trigger even on manual demo."
+  mode: single
+  trigger:
+    - platform: sun
+      event: sunrise
+  action:
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.quiet_mode
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.last_action
+      data:
+        value: "☀️ Quiet mode OFF (sunrise) · {{ now().strftime('%H:%M:%S') }}"
+    - service: light.turn_on
+      target:
+        entity_id: light.smartlend_nfc_status_ring
+      data:
+        rgb_color: [255, 210, 60]
+        brightness_pct: 45
+    - delay: "00:00:01.2"
+    - service: light.turn_off
+      target:
+        entity_id: light.smartlend_nfc_status_ring
+    - service: logbook.log
+      data:
+        name: SmartLend
+        message: "Quiet mode deactivated at sunrise"
+
 - id: smartlend_user_card
   alias: "SmartLend - User card scan sets active user"
   description: "White card sets active_user to 'Team'; cleared automatically after 30s"
@@ -60,7 +130,7 @@
 
 - id: smartlend_led_on_borrow
   alias: "SmartLend - LED green on borrow, blue on return"
-  description: "Fires whenever an item state changes and flashes the status ring"
+  description: "Fires whenever an item state changes and flashes the status ring. Quiet mode dims to 5% instead of silencing completely so there is still a feedback cue at night."
   mode: parallel
   max: 10
   trigger:
@@ -75,11 +145,10 @@
         - input_select.item_hdmi_cable
         - input_select.item_headphones
         - input_select.item_sd_reader
-  condition:
-    - condition: state
-      entity_id: input_boolean.quiet_mode
-      state: "off"
   action:
+    - variables:
+        quiet: "{{ is_state('input_boolean.quiet_mode', 'on') }}"
+        bright: "{{ 5 if quiet else 55 }}"
     # Clear any lingering color (e.g. the 'selecting' white) so the transition
     # to the new color is clean and not an imperceptible blend. 80 ms is enough
     # for ESPHome's 100 ms default transition to begin from zero.
@@ -99,7 +168,7 @@
                 entity_id: light.smartlend_nfc_status_ring
               data:
                 rgb_color: [0, 255, 0]
-                brightness_pct: 55
+                brightness_pct: "{{ bright }}"
         - conditions:
             - condition: template
               value_template: "{{ trigger.to_state.state == 'available' }}"
@@ -109,7 +178,7 @@
                 entity_id: light.smartlend_nfc_status_ring
               data:
                 rgb_color: [0, 120, 255]
-                brightness_pct: 55
+                brightness_pct: "{{ bright }}"
     - delay: "00:00:02.5"
     - service: light.turn_off
       target:
@@ -129,12 +198,14 @@
       data:
         value: >
           Tag scanned: {{ trigger.event.data.tag_id }} — waiting for selection…
+    - variables:
+        quiet: "{{ is_state('input_boolean.quiet_mode', 'on') }}"
     - service: light.turn_on
       target:
         entity_id: light.smartlend_nfc_status_ring
       data:
         rgb_color: [255, 255, 255]
-        brightness_pct: 25
+        brightness_pct: "{{ 5 if quiet else 25 }}"
     # Wait until the user picks an item (state change) OR 15 s elapse.
     # If a state change fires, we yield and let smartlend_led_on_borrow
     # paint green/blue — we do NOT turn the light off, otherwise we'd
