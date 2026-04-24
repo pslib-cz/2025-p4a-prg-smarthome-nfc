@@ -4,6 +4,27 @@ SmartLend je lokalni IoT pripadova studie pro dvouclenny tym. Projekt simuluje p
 
 Primarni cil je provoz na notebooku. Raspberry Pi je jen zalozni varianta, pokud by notebook/virtualizace delaly problemy.
 
+## Rychle spusteni
+
+Vse je zabalene do jednoho skriptu. Z cisteho klonu repozitare:
+
+```bash
+./smartlend.sh install      # jednorazovy setup: secrets, TLS cert, MQTT heslo, build UI
+./smartlend.sh start        # spusti 4 kontejnery (HA + MQTT + ESPHome + UI)
+./smartlend.sh status       # overi zdravi vsech sluzeb vcetne ESP online
+./smartlend.sh flash        # kompiluje a flashne ESP32 pres USB /dev/ttyACM0
+./smartlend.sh logs ha      # streamuje logy vybrane sluzby (ha / ui / esphome / mqtt)
+./smartlend.sh reset        # resetuje vsechny polozky do stavu 'available'
+./smartlend.sh urls         # vypise URL dashboardu + HA admin
+./smartlend.sh stop         # zastavi stack
+```
+
+`install` sam vygeneruje vsechny tajne udaje (TLS cert, MQTT heslo, ESPHome API key, OTA heslo, fallback AP heslo) a posle te pres vytvoreni HA long-lived tokenu. Soubor `stack/.env`, `stack/homeassistant/config/secrets.yaml`, `stack/esphome/config/secrets.yaml` se nikdy necommituji — jsou v `.gitignore`.
+
+Vychozi URL po startu:
+- **UI kiosk:** http://localhost:3001
+- **Home Assistant:** https://localhost:8123 *(self-signed cert, prijmout jednou)*
+
 ## Co mame podle fotek
 
 Fotky jsou ve slozce [`IMGS`](./IMGS/).
